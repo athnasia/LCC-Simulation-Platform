@@ -627,18 +627,16 @@ class EnergyRateBrief(BaseModel):
 
 class EnergyCalendarBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="时段名称（如：峰时段、平时段、谷时段）")
-    start_time: time = Field(..., description="开始时间（如：08:00:00）")
-    end_time: time = Field(..., description="结束时间（如：12:00:00）")
+    start_time: time = Field(..., description="开始时间（如：08:00:00，支持跨天时段如 23:00:00）")
+    end_time: time = Field(..., description="结束时间（如：12:00:00，若小于开始时间则表示跨天）")
     multiplier: Decimal = Field(Decimal("1.0"), ge=0, description="费率系数（如：峰时段 1.5，谷时段 0.5）")
     is_active: bool = Field(True, description="是否启用")
     description: str | None = Field(None, max_length=256, description="时段描述")
 
-    @model_validator(mode="after")
-    def validate_time_range(self):
-        """校验开始时间必须小于结束时间"""
-        if self.start_time >= self.end_time:
-            raise ValueError("开始时间必须小于结束时间")
-        return self
+    @property
+    def is_cross_day(self) -> bool:
+        """判断是否为跨天时段（如 23:00 -> 次日 07:00）"""
+        return self.start_time >= self.end_time
 
 
 class EnergyCalendarCreate(EnergyCalendarBase):

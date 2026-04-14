@@ -332,6 +332,12 @@ class MdProcess(AuditMixin, Base):
 
 class MdProcessResource(AuditMixin, Base):
     __tablename__ = "md_process_resource"
+    __table_args__ = (
+        UniqueConstraint(
+            "process_id", "resource_type", "resource_id", "is_deleted",
+            name="uq_md_process_resource_unique"
+        ),
+    )
 
     process_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("md_process.id"), nullable=False, comment="工序 ID"

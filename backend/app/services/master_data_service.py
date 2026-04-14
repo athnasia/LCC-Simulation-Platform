@@ -103,6 +103,30 @@ def _build_deleted_unique_value(value: str | None, record_id: int, max_length: i
     return f"{value[:keep_length]}{suffix}"
 
 
+def _check_process_resource_reference(
+    db: Session, resource_type: ResourceType, resource_id: int, resource_name: str
+) -> None:
+    """检查资源是否被工序引用，若被引用则抛出异常"""
+    from app.models.master_data import MdProcessResource
+
+    references = db.execute(
+        select(MdProcessResource).where(
+            MdProcessResource.resource_type == resource_type,
+            MdProcessResource.resource_id == resource_id,
+            MdProcessResource.is_deleted == False,
+        )
+        .limit(5)
+    ).scalars().all()
+
+    if references:
+        process_names = [f"工序ID={ref.process_id}" for ref in references[:3]]
+        extra = f"等 {len(references)} 个工序" if len(references) > 3 else ""
+        raise BusinessRuleViolationError(
+            error_code="RESOURCE_REFERENCED_BY_PROCESS",
+            message=f"{resource_name} 已被工序引用（{', '.join(process_names)}{extra}），无法删除。请先解除工序中的资源挂载。",
+        )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 一、量纲服务
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1110,6 +1134,10 @@ class MaterialService:
     def delete(self, material_id: int, operator: str) -> None:
         material = self._get_or_404(material_id)
 
+        _check_process_resource_reference(
+            self.db, ResourceType.MATERIAL, material_id, f"材料【{material.name}】"
+        )
+
         material.code = _build_deleted_unique_value(material.code, material.id, 50)
         material.is_deleted = True
         material.updated_by = operator
@@ -1263,6 +1291,10 @@ class EquipmentService:
 
     def delete(self, equipment_id: int, operator: str) -> None:
         equipment = self._get_or_404(equipment_id)
+
+        _check_process_resource_reference(
+            self.db, ResourceType.EQUIPMENT, equipment_id, f"设备【{equipment.name}】"
+        )
 
         equipment.code = _build_deleted_unique_value(equipment.code, equipment.id, 50)
         equipment.is_deleted = True
@@ -1419,7 +1451,7 @@ class ProcessService:
         self.db.flush()
 
     def clone(self, process_id: int, payload: ProcessCloneRequest, operator: str) -> ProcessResponse:
-        """复制工序及其资源挂载包"""
+        """复制工序及其资源挂载包（使用批量插入优化性能）"""
         source = self._get_or_404(process_id)
         self._assert_code_unique(payload.new_code)
 
@@ -1437,9 +1469,9 @@ class ProcessService:
         self.db.add(new_process)
         self.db.flush()
 
-        if payload.copy_resources:
-            for resource in source.resources:
-                new_resource = MdProcessResource(
+        if payload.copy_resources and source.resources:
+            new_resources = [
+                MdProcessResource(
                     process_id=new_process.id,
                     resource_type=resource.resource_type,
                     resource_id=resource.resource_id,
@@ -1448,7 +1480,9 @@ class ProcessService:
                     created_by=operator,
                     updated_by=operator,
                 )
-                self.db.add(new_resource)
+                for resource in source.resources
+            ]
+            self.db.add_all(new_resources)
             self.db.flush()
 
         new_process = self.db.execute(
@@ -1465,7 +1499,24 @@ class ProcessService:
         self, process_id: int, payload: ProcessResourceCreate, operator: str
     ) -> ProcessResourceResponse:
         """为工序添加资源挂载"""
+        from sqlalchemy.exc import IntegrityError
+
         process = self._get_or_404(process_id)
+
+        existing = self.db.execute(
+            select(MdProcessResource).where(
+                MdProcessResource.process_id == process_id,
+                MdProcessResource.resource_type == payload.resource_type,
+                MdProcessResource.resource_id == payload.resource_id,
+                MdProcessResource.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            raise BusinessRuleViolationError(
+                error_code="PROCESS_RESOURCE_DUPLICATE",
+                message=f"该工序已挂载此资源（类型：{payload.resource_type.value}，ID：{payload.resource_id}），请勿重复添加",
+            )
 
         resource = MdProcessResource(
             process_id=process_id,
@@ -1633,6 +1684,10 @@ class LaborService:
 
     def delete(self, labor_id: int, operator: str) -> None:
         labor = self._get_or_404(labor_id)
+
+        _check_process_resource_reference(
+            self.db, ResourceType.LABOR, labor_id, f"人员【{labor.name}】"
+        )
 
         labor.code = _build_deleted_unique_value(labor.code, labor.id, 50)
         labor.is_deleted = True
