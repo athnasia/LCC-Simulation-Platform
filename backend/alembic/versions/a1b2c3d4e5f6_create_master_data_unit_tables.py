@@ -45,7 +45,7 @@ def upgrade() -> None:
         sa.Column('name', sa.String(50), nullable=False, comment='单位名称'),
         sa.Column('code', sa.String(20), nullable=False, comment='单位编码'),
         sa.Column('symbol', sa.String(10), nullable=True, comment='单位符号'),
-        sa.Column('dimension_id', sa.Integer(), nullable=False, comment='所属量纲 ID'),
+        sa.Column('dimension_id', sa.BigInteger(), nullable=False, comment='所属量纲 ID'),
         sa.Column('is_base', sa.Boolean(), server_default='0', nullable=False, comment='是否基础单位'),
         sa.Column('description', sa.String(256), nullable=True, comment='单位描述'),
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False, comment='主键 ID'),
@@ -63,8 +63,8 @@ def upgrade() -> None:
     # ── 3. 单位换算表 ───────────────────────────────────────────────────────────
     op.create_table(
         'md_unit_conversion',
-        sa.Column('from_unit_id', sa.Integer(), nullable=False, comment='源单位 ID'),
-        sa.Column('to_unit_id', sa.Integer(), nullable=False, comment='目标单位 ID'),
+        sa.Column('from_unit_id', sa.BigInteger(), nullable=False, comment='源单位 ID'),
+        sa.Column('to_unit_id', sa.BigInteger(), nullable=False, comment='目标单位 ID'),
         sa.Column('conversion_factor', sa.Numeric(20, 10), nullable=False, comment='换算因子'),
         sa.Column('offset', sa.Numeric(20, 10), nullable=True, comment='偏移量'),
         sa.Column('description', sa.String(256), nullable=True, comment='换算说明'),
