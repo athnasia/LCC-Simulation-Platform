@@ -168,3 +168,73 @@ class MdAttrDefinition(AuditMixin, Base):
     )
 
     unit: Mapped["MdUnit | None"] = relationship("MdUnit")
+
+
+# ── 材料主数据（柔性建模）──────────────────────────────────────────────────────
+
+class MdMaterial(AuditMixin, Base):
+    __tablename__ = "md_material"
+    __table_args__ = (
+        UniqueConstraint("code", "is_deleted", name="uq_md_material_code_deleted"),
+    )
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="材料名称")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="材料编码（业务唯一标识）")
+    category_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("md_resource_category.id"), nullable=True, comment="材料分类 ID"
+    )
+    pricing_unit_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("md_unit.id"), nullable=True, comment="计价单位 ID"
+    )
+    consumption_unit_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("md_unit.id"), nullable=True, comment="消耗单位 ID"
+    )
+    dynamic_attributes: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="柔性属性（JSON 对象，如：{\"density\": 7.85, \"surface_treatment\": \"镀锌\"}）"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="材料描述")
+
+    category: Mapped["MdResourceCategory | None"] = relationship(
+        "MdResourceCategory", foreign_keys=[category_id]
+    )
+    pricing_unit: Mapped["MdUnit | None"] = relationship(
+        "MdUnit", foreign_keys=[pricing_unit_id]
+    )
+    consumption_unit: Mapped["MdUnit | None"] = relationship(
+        "MdUnit", foreign_keys=[consumption_unit_id]
+    )
+
+
+# ── 设备主数据（数字孪生）──────────────────────────────────────────────────────
+
+class MdEquipment(AuditMixin, Base):
+    __tablename__ = "md_equipment"
+    __table_args__ = (
+        UniqueConstraint("code", "is_deleted", name="uq_md_equipment_code_deleted"),
+    )
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="设备名称")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="设备编码（业务唯一标识）")
+    category_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("md_resource_category.id"), nullable=True, comment="设备分类 ID"
+    )
+    depreciation_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="静态折旧费率（元/小时或元/月）"
+    )
+    power_consumption: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="基础能耗系数（kW/h）"
+    )
+    dynamic_attributes: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="柔性属性（JSON 对象，如：{\"rated_power\": 15.0, \"spindle_speed\": 3000}）"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="设备描述")
+
+    category: Mapped["MdResourceCategory | None"] = relationship(
+        "MdResourceCategory", foreign_keys=[category_id]
+    )

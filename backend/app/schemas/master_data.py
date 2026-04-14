@@ -10,6 +10,7 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -287,6 +288,90 @@ class AttrDefinitionUpdate(BaseModel):
 class AttrDefinitionResponse(AttrDefinitionBase):
     id: int
     unit: UnitBrief | None
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
+
+    class Config:
+        from_attributes = True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 七、材料主数据（Material）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MaterialBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="材料名称")
+    code: str = Field(..., min_length=1, max_length=50, description="材料编码")
+    category_id: int | None = Field(None, description="材料分类 ID")
+    pricing_unit_id: int | None = Field(None, description="计价单位 ID")
+    consumption_unit_id: int | None = Field(None, description="消耗单位 ID")
+    dynamic_attributes: dict[str, Any] | None = Field(None, description="柔性属性")
+    is_active: bool = Field(True, description="是否启用")
+    description: str | None = Field(None, max_length=512, description="材料描述")
+
+
+class MaterialCreate(MaterialBase):
+    pass
+
+
+class MaterialUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    category_id: int | None = None
+    pricing_unit_id: int | None = None
+    consumption_unit_id: int | None = None
+    dynamic_attributes: dict[str, Any] | None = None
+    is_active: bool | None = None
+    description: str | None = Field(None, max_length=512)
+
+
+class MaterialResponse(MaterialBase):
+    id: int
+    category: ResourceCategoryResponse | None
+    pricing_unit: UnitBrief | None
+    consumption_unit: UnitBrief | None
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
+
+    class Config:
+        from_attributes = True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 八、设备主数据（Equipment）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class EquipmentBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="设备名称")
+    code: str = Field(..., min_length=1, max_length=50, description="设备编码")
+    category_id: int | None = Field(None, description="设备分类 ID")
+    depreciation_rate: Decimal | None = Field(None, description="静态折旧费率")
+    power_consumption: Decimal | None = Field(None, description="基础能耗系数")
+    dynamic_attributes: dict[str, Any] | None = Field(None, description="柔性属性")
+    is_active: bool = Field(True, description="是否启用")
+    description: str | None = Field(None, max_length=512, description="设备描述")
+
+
+class EquipmentCreate(EquipmentBase):
+    pass
+
+
+class EquipmentUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    category_id: int | None = None
+    depreciation_rate: Decimal | None = None
+    power_consumption: Decimal | None = None
+    dynamic_attributes: dict[str, Any] | None = None
+    is_active: bool | None = None
+    description: str | None = Field(None, max_length=512)
+
+
+class EquipmentResponse(EquipmentBase):
+    id: int
+    category: ResourceCategoryResponse | None
     created_at: datetime
     updated_at: datetime
     created_by: str | None

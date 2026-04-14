@@ -82,6 +82,18 @@ class BusinessRuleViolationError(AppBaseException):
     error_code = "BUSINESS_RULE_VIOLATION"
     message = "操作违反业务规则"
 
+    def __init__(
+        self,
+        message: str | None = None,
+        detail: dict[str, Any] | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        self.message = message or self.__class__.message
+        self.detail = detail or {}
+        if error_code:
+            self.error_code = error_code
+        super().__init__(message=self.message, detail=self.detail)
+
 
 # ── 领域层计算异常 ─────────────────────────────────────────────────────────────
 

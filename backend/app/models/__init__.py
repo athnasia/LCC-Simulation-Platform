@@ -5,7 +5,15 @@ ORM 模型包
 """
 
 from app.models.base import AuditMixin, Base
-from app.models.master_data import MdUnit, MdUnitConversion, MdUnitDimension
+from app.models.master_data import (
+    MdAttrDefinition,
+    MdEquipment,
+    MdMaterial,
+    MdResourceCategory,
+    MdUnit,
+    MdUnitConversion,
+    MdUnitDimension,
+)
 from app.models.system import (
     OrgDepartment,
     SysAuditLog,
@@ -31,4 +39,8 @@ __all__ = [
     "MdUnitDimension",
     "MdUnit",
     "MdUnitConversion",
+    "MdResourceCategory",
+    "MdAttrDefinition",
+    "MdMaterial",
+    "MdEquipment",
 ]

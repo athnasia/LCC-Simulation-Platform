@@ -7,12 +7,15 @@
   - UnitConversionService  单位换算 CRUD（同量纲校验、换算计算）
   - ResourceCategoryService 资源分类 CRUD（树形结构组装）
   - AttrDefinitionService  属性定义 CRUD（变量标识码唯一性）
+  - MaterialService        材料主数据 CRUD（分类类型校验）
+  - EquipmentService       设备主数据 CRUD（分类类型校验）
 
 设计约定：
     1. 所有服务接收 Session 并在此层管理数据库操作，路由层只负责 I/O 转换
     2. 逻辑删除统一通过 is_deleted=True 实现，禁止物理 DELETE
     3. 写操作由路由层统一 commit，Service 内仅负责 add/flush
     4. 单位换算创建时强制校验源单位和目标单位属于同一量纲
+    5. 材料/设备创建时强制校验分类类型匹配
 """
 
 from __future__ import annotations
@@ -25,16 +28,25 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
 from app.models.master_data import (
     MdAttrDefinition,
+    MdEquipment,
+    MdMaterial,
     MdResourceCategory,
     MdUnit,
     MdUnitConversion,
     MdUnitDimension,
+    ResourceType,
 )
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     AttrDefinitionCreate,
     AttrDefinitionResponse,
     AttrDefinitionUpdate,
+    EquipmentCreate,
+    EquipmentResponse,
+    EquipmentUpdate,
+    MaterialCreate,
+    MaterialResponse,
+    MaterialUpdate,
     ResourceCategoryCreate,
     ResourceCategoryResponse,
     ResourceCategoryUpdate,
@@ -864,4 +876,368 @@ class AttrDefinitionService:
         attr.code = _build_deleted_unique_value(attr.code, attr.id, 30)
         attr.is_deleted = True
         attr.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 六、材料主数据服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MaterialService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, material_id: int) -> MdMaterial:
+        material = self.db.execute(
+            select(MdMaterial).where(
+                MdMaterial.id == material_id,
+                MdMaterial.is_deleted == False,
+            )
+            .options(
+                selectinload(MdMaterial.category),
+                selectinload(MdMaterial.pricing_unit),
+                selectinload(MdMaterial.consumption_unit),
+            )
+        ).scalar_one_or_none()
+        if material is None:
+            raise ResourceNotFoundError(resource="材料", identifier=material_id)
+        return material
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdMaterial).where(
+            MdMaterial.code == code,
+            MdMaterial.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdMaterial.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="MATERIAL_CODE_DUPLICATE",
+                message=f"材料编码已存在：{code}",
+            )
+
+    def _validate_category_type(self, category_id: int | None) -> None:
+        """校验分类类型必须为 MATERIAL"""
+        if category_id is None:
+            return
+
+        category = self.db.execute(
+            select(MdResourceCategory).where(
+                MdResourceCategory.id == category_id,
+                MdResourceCategory.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+
+        if category is None:
+            raise ResourceNotFoundError(resource="材料分类", identifier=category_id)
+
+        if category.resource_type != ResourceType.MATERIAL:
+            raise BusinessRuleViolationError(
+                error_code="MATERIAL_CATEGORY_TYPE_MISMATCH",
+                message=f"材料分类类型不匹配：期望 MATERIAL，实际为 {category.resource_type}",
+                detail={
+                    "category_id": category_id,
+                    "expected_type": "MATERIAL",
+                    "actual_type": category.resource_type,
+                },
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        category_id: int | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[MaterialResponse]:
+        stmt = select(MdMaterial).where(MdMaterial.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdMaterial.name.ilike(f"%{keyword}%"),
+                    MdMaterial.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if category_id is not None:
+            stmt = stmt.where(MdMaterial.category_id == category_id)
+        if is_active is not None:
+            stmt = stmt.where(MdMaterial.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(
+            selectinload(MdMaterial.category),
+            selectinload(MdMaterial.pricing_unit),
+            selectinload(MdMaterial.consumption_unit),
+        )
+        stmt = stmt.order_by(MdMaterial.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[MaterialResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, material_id: int) -> MaterialResponse:
+        material = self._get_or_404(material_id)
+        return MaterialResponse.model_validate(material)
+
+    def create(self, payload: MaterialCreate, operator: str) -> MaterialResponse:
+        self._assert_code_unique(payload.code)
+        self._validate_category_type(payload.category_id)
+
+        if payload.pricing_unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.pricing_unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="计价单位", identifier=payload.pricing_unit_id)
+
+        if payload.consumption_unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.consumption_unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="消耗单位", identifier=payload.consumption_unit_id)
+
+        material = MdMaterial(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(material)
+        self.db.flush()
+
+        material = self.db.execute(
+            select(MdMaterial)
+            .where(MdMaterial.id == material.id)
+            .options(
+                selectinload(MdMaterial.category),
+                selectinload(MdMaterial.pricing_unit),
+                selectinload(MdMaterial.consumption_unit),
+            )
+        ).scalar_one()
+        return MaterialResponse.model_validate(material)
+
+    def update(
+        self, material_id: int, payload: MaterialUpdate, operator: str
+    ) -> MaterialResponse:
+        material = self._get_or_404(material_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=material_id)
+
+        if payload.category_id is not None:
+            self._validate_category_type(payload.category_id)
+
+        if payload.pricing_unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.pricing_unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="计价单位", identifier=payload.pricing_unit_id)
+
+        if payload.consumption_unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.consumption_unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="消耗单位", identifier=payload.consumption_unit_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(material, field, value)
+        material.updated_by = operator
+        self.db.flush()
+
+        material = self.db.execute(
+            select(MdMaterial)
+            .where(MdMaterial.id == material_id)
+            .options(
+                selectinload(MdMaterial.category),
+                selectinload(MdMaterial.pricing_unit),
+                selectinload(MdMaterial.consumption_unit),
+            )
+        ).scalar_one()
+        return MaterialResponse.model_validate(material)
+
+    def delete(self, material_id: int, operator: str) -> None:
+        material = self._get_or_404(material_id)
+
+        material.code = _build_deleted_unique_value(material.code, material.id, 50)
+        material.is_deleted = True
+        material.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 七、设备主数据服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EquipmentService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, equipment_id: int) -> MdEquipment:
+        equipment = self.db.execute(
+            select(MdEquipment).where(
+                MdEquipment.id == equipment_id,
+                MdEquipment.is_deleted == False,
+            )
+            .options(selectinload(MdEquipment.category))
+        ).scalar_one_or_none()
+        if equipment is None:
+            raise ResourceNotFoundError(resource="设备", identifier=equipment_id)
+        return equipment
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdEquipment).where(
+            MdEquipment.code == code,
+            MdEquipment.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdEquipment.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="EQUIPMENT_CODE_DUPLICATE",
+                message=f"设备编码已存在：{code}",
+            )
+
+    def _validate_category_type(self, category_id: int | None) -> None:
+        """校验分类类型必须为 EQUIPMENT"""
+        if category_id is None:
+            return
+
+        category = self.db.execute(
+            select(MdResourceCategory).where(
+                MdResourceCategory.id == category_id,
+                MdResourceCategory.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+
+        if category is None:
+            raise ResourceNotFoundError(resource="设备分类", identifier=category_id)
+
+        if category.resource_type != ResourceType.EQUIPMENT:
+            raise BusinessRuleViolationError(
+                error_code="EQUIPMENT_CATEGORY_TYPE_MISMATCH",
+                message=f"设备分类类型不匹配：期望 EQUIPMENT，实际为 {category.resource_type}",
+                detail={
+                    "category_id": category_id,
+                    "expected_type": "EQUIPMENT",
+                    "actual_type": category.resource_type,
+                },
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        category_id: int | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[EquipmentResponse]:
+        stmt = select(MdEquipment).where(MdEquipment.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdEquipment.name.ilike(f"%{keyword}%"),
+                    MdEquipment.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if category_id is not None:
+            stmt = stmt.where(MdEquipment.category_id == category_id)
+        if is_active is not None:
+            stmt = stmt.where(MdEquipment.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(selectinload(MdEquipment.category))
+        stmt = stmt.order_by(MdEquipment.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[EquipmentResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, equipment_id: int) -> EquipmentResponse:
+        equipment = self._get_or_404(equipment_id)
+        return EquipmentResponse.model_validate(equipment)
+
+    def create(self, payload: EquipmentCreate, operator: str) -> EquipmentResponse:
+        self._assert_code_unique(payload.code)
+        self._validate_category_type(payload.category_id)
+
+        equipment = MdEquipment(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(equipment)
+        self.db.flush()
+
+        equipment = self.db.execute(
+            select(MdEquipment)
+            .where(MdEquipment.id == equipment.id)
+            .options(selectinload(MdEquipment.category))
+        ).scalar_one()
+        return EquipmentResponse.model_validate(equipment)
+
+    def update(
+        self, equipment_id: int, payload: EquipmentUpdate, operator: str
+    ) -> EquipmentResponse:
+        equipment = self._get_or_404(equipment_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=equipment_id)
+
+        if payload.category_id is not None:
+            self._validate_category_type(payload.category_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(equipment, field, value)
+        equipment.updated_by = operator
+        self.db.flush()
+
+        equipment = self.db.execute(
+            select(MdEquipment)
+            .where(MdEquipment.id == equipment_id)
+            .options(selectinload(MdEquipment.category))
+        ).scalar_one()
+        return EquipmentResponse.model_validate(equipment)
+
+    def delete(self, equipment_id: int, operator: str) -> None:
+        equipment = self._get_or_404(equipment_id)
+
+        equipment.code = _build_deleted_unique_value(equipment.code, equipment.id, 50)
+        equipment.is_deleted = True
+        equipment.updated_by = operator
         self.db.flush()
