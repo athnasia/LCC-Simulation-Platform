@@ -5,6 +5,8 @@
   - 量纲定义（UnitDimension）CRUD 接口
   - 单位（Unit）CRUD 接口
   - 单位换算（UnitConversion）CRUD 接口 + 换算计算接口
+  - 资源分类（ResourceCategory）CRUD 接口 + 树形查询接口
+  - 属性定义（AttrDefinition）CRUD 接口
 
 路由层职责边界：
   - 接收并校验请求参数（Pydantic 自动完成）
@@ -20,6 +22,13 @@ from app.core.dependencies import get_current_active_user, get_db, require_permi
 from app.models.system import SysUser
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
+    AttrDefinitionCreate,
+    AttrDefinitionResponse,
+    AttrDefinitionUpdate,
+    ResourceCategoryCreate,
+    ResourceCategoryResponse,
+    ResourceCategoryTreeResponse,
+    ResourceCategoryUpdate,
     UnitConversionCalculateRequest,
     UnitConversionCalculateResponse,
     UnitConversionCreate,
@@ -33,6 +42,8 @@ from app.schemas.master_data import (
     UnitUpdate,
 )
 from app.services.master_data_service import (
+    AttrDefinitionService,
+    ResourceCategoryService,
     UnitConversionService,
     UnitDimensionService,
     UnitService,
@@ -320,3 +331,206 @@ def calculate_conversion(
     _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
 ) -> UnitConversionCalculateResponse:
     return UnitConversionService(db).calculate(payload)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 四、资源分类接口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/categories",
+    response_model=PageResult[ResourceCategoryResponse],
+    summary="查询资源分类列表",
+    description="支持按关键字、资源类型、父分类、是否启用筛选，分页返回。",
+)
+def list_categories(
+    keyword: str | None = Query(None, description="分类名称或编码关键字"),
+    resource_type: str | None = Query(None, description="资源类型"),
+    parent_id: int | None = Query(None, description="父分类 ID"),
+    is_active: bool | None = Query(None, description="是否启用"),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=500, description="每页数量"),
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
+) -> PageResult[ResourceCategoryResponse]:
+    return ResourceCategoryService(db).list(
+        keyword=keyword,
+        resource_type=resource_type,
+        parent_id=parent_id,
+        is_active=is_active,
+        page=page,
+        size=size,
+    )
+
+
+@router.get(
+    "/categories/tree",
+    response_model=list[ResourceCategoryTreeResponse],
+    summary="获取资源分类树",
+    description="返回树状结构的分类列表，供前端级联选择器使用。",
+)
+def get_category_tree(
+    resource_type: str | None = Query(None, description="资源类型"),
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
+) -> list[ResourceCategoryTreeResponse]:
+    tree_data = ResourceCategoryService(db).get_tree(resource_type=resource_type)
+    return [ResourceCategoryTreeResponse(**node) for node in tree_data]
+
+
+@router.post(
+    "/categories",
+    response_model=ResourceCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="创建资源分类",
+)
+def create_category(
+    payload: ResourceCategoryCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "write")),
+) -> ResourceCategoryResponse:
+    operator = str(current_user.id)
+    result = ResourceCategoryService(db).create(payload, operator)
+    _commit_write(db)
+    return result
+
+
+@router.get(
+    "/categories/{category_id}",
+    response_model=ResourceCategoryResponse,
+    summary="获取资源分类详情",
+)
+def get_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
+) -> ResourceCategoryResponse:
+    return ResourceCategoryService(db).get(category_id)
+
+
+@router.put(
+    "/categories/{category_id}",
+    response_model=ResourceCategoryResponse,
+    summary="更新资源分类",
+)
+def update_category(
+    category_id: int,
+    payload: ResourceCategoryUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "write")),
+) -> ResourceCategoryResponse:
+    operator = str(current_user.id)
+    result = ResourceCategoryService(db).update(category_id, payload, operator)
+    _commit_write(db)
+    return result
+
+
+@router.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除资源分类",
+)
+def delete_category(
+    category_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "delete")),
+) -> None:
+    operator = str(current_user.id)
+    ResourceCategoryService(db).delete(category_id, operator)
+    _commit_write(db)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 五、属性定义接口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/attributes",
+    response_model=PageResult[AttrDefinitionResponse],
+    summary="查询属性定义列表",
+    description="支持按关键字、数据类型、适用资源类型筛选，分页返回。",
+)
+def list_attributes(
+    keyword: str | None = Query(None, description="属性名称或编码关键字"),
+    data_type: str | None = Query(None, description="数据类型"),
+    resource_type: str | None = Query(None, description="适用资源类型"),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=500, description="每页数量"),
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
+) -> PageResult[AttrDefinitionResponse]:
+    return AttrDefinitionService(db).list(
+        keyword=keyword,
+        data_type=data_type,
+        resource_type=resource_type,
+        page=page,
+        size=size,
+    )
+
+
+@router.post(
+    "/attributes",
+    response_model=AttrDefinitionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="创建属性定义",
+)
+def create_attribute(
+    payload: AttrDefinitionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "write")),
+) -> AttrDefinitionResponse:
+    operator = str(current_user.id)
+    result = AttrDefinitionService(db).create(payload, operator)
+    _commit_write(db)
+    return result
+
+
+@router.get(
+    "/attributes/{attr_id}",
+    response_model=AttrDefinitionResponse,
+    summary="获取属性定义详情",
+)
+def get_attribute(
+    attr_id: int,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
+) -> AttrDefinitionResponse:
+    return AttrDefinitionService(db).get(attr_id)
+
+
+@router.put(
+    "/attributes/{attr_id}",
+    response_model=AttrDefinitionResponse,
+    summary="更新属性定义",
+)
+def update_attribute(
+    attr_id: int,
+    payload: AttrDefinitionUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "write")),
+) -> AttrDefinitionResponse:
+    operator = str(current_user.id)
+    result = AttrDefinitionService(db).update(attr_id, payload, operator)
+    _commit_write(db)
+    return result
+
+
+@router.delete(
+    "/attributes/{attr_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除属性定义",
+)
+def delete_attribute(
+    attr_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/dict-templates", "delete")),
+) -> None:
+    operator = str(current_user.id)
+    AttrDefinitionService(db).delete(attr_id, operator)
+    _commit_write(db)

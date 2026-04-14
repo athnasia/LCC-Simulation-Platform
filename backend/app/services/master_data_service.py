@@ -5,6 +5,8 @@
   - UnitDimensionService   量纲 CRUD（编码唯一性）
   - UnitService            单位 CRUD（编码唯一性、量纲关联）
   - UnitConversionService  单位换算 CRUD（同量纲校验、换算计算）
+  - ResourceCategoryService 资源分类 CRUD（树形结构组装）
+  - AttrDefinitionService  属性定义 CRUD（变量标识码唯一性）
 
 设计约定：
     1. 所有服务接收 Session 并在此层管理数据库操作，路由层只负责 I/O 转换
@@ -21,9 +23,21 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
-from app.models.master_data import MdUnit, MdUnitConversion, MdUnitDimension
+from app.models.master_data import (
+    MdAttrDefinition,
+    MdResourceCategory,
+    MdUnit,
+    MdUnitConversion,
+    MdUnitDimension,
+)
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
+    AttrDefinitionCreate,
+    AttrDefinitionResponse,
+    AttrDefinitionUpdate,
+    ResourceCategoryCreate,
+    ResourceCategoryResponse,
+    ResourceCategoryUpdate,
     UnitConversionCalculateRequest,
     UnitConversionCalculateResponse,
     UnitConversionCreate,
@@ -502,3 +516,352 @@ class UnitConversionService:
             conversion_factor=conversion.conversion_factor,
             offset=conversion.offset,
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 四、资源分类服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ResourceCategoryService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, category_id: int) -> MdResourceCategory:
+        category = self.db.execute(
+            select(MdResourceCategory).where(
+                MdResourceCategory.id == category_id,
+                MdResourceCategory.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if category is None:
+            raise ResourceNotFoundError(resource="资源分类", identifier=category_id)
+        return category
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdResourceCategory).where(
+            MdResourceCategory.code == code,
+            MdResourceCategory.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdResourceCategory.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="RESOURCE_CATEGORY_CODE_DUPLICATE",
+                message=f"资源分类编码已存在：{code}",
+            )
+
+    def _build_tree(self, categories: list[MdResourceCategory]) -> list[dict]:
+        """将扁平列表组装成树状结构"""
+        category_map = {cat.id: cat for cat in categories}
+        root_categories = []
+        
+        for cat in categories:
+            if cat.parent_id is None:
+                cat_dict = {
+                    "id": cat.id,
+                    "name": cat.name,
+                    "code": cat.code,
+                    "resource_type": cat.resource_type,
+                    "parent_id": cat.parent_id,
+                    "sort_order": cat.sort_order,
+                    "is_active": cat.is_active,
+                    "description": cat.description,
+                    "children": [],
+                    "created_at": cat.created_at,
+                    "updated_at": cat.updated_at,
+                    "created_by": cat.created_by,
+                    "updated_by": cat.updated_by,
+                }
+                root_categories.append(cat_dict)
+            else:
+                parent = category_map.get(cat.parent_id)
+                if parent:
+                    if not hasattr(parent, "children"):
+                        parent.children = []
+                    cat_dict = {
+                        "id": cat.id,
+                        "name": cat.name,
+                        "code": cat.code,
+                        "resource_type": cat.resource_type,
+                        "parent_id": cat.parent_id,
+                        "sort_order": cat.sort_order,
+                        "is_active": cat.is_active,
+                        "description": cat.description,
+                        "children": [],
+                        "created_at": cat.created_at,
+                        "updated_at": cat.updated_at,
+                        "created_by": cat.created_by,
+                        "updated_by": cat.updated_by,
+                    }
+                    parent.children.append(cat_dict)
+        
+        return root_categories
+
+    def list(
+        self,
+        keyword: str | None = None,
+        resource_type: str | None = None,
+        parent_id: int | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[ResourceCategoryResponse]:
+        stmt = select(MdResourceCategory).where(MdResourceCategory.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdResourceCategory.name.ilike(f"%{keyword}%"),
+                    MdResourceCategory.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if resource_type:
+            stmt = stmt.where(MdResourceCategory.resource_type == resource_type)
+        if parent_id is not None:
+            stmt = stmt.where(MdResourceCategory.parent_id == parent_id)
+        if is_active is not None:
+            stmt = stmt.where(MdResourceCategory.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.order_by(MdResourceCategory.sort_order, MdResourceCategory.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[ResourceCategoryResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get_tree(
+        self,
+        resource_type: str | None = None,
+    ) -> list[dict]:
+        """获取树状结构的分类列表"""
+        stmt = select(MdResourceCategory).where(
+            MdResourceCategory.is_deleted == False,
+            MdResourceCategory.is_active == True,
+        )
+
+        if resource_type:
+            stmt = stmt.where(MdResourceCategory.resource_type == resource_type)
+
+        stmt = stmt.order_by(MdResourceCategory.sort_order, MdResourceCategory.id)
+        categories = self.db.execute(stmt).scalars().all()
+
+        return self._build_tree(categories)
+
+    def get(self, category_id: int) -> ResourceCategoryResponse:
+        category = self._get_or_404(category_id)
+        return ResourceCategoryResponse.model_validate(category)
+
+    def create(self, payload: ResourceCategoryCreate, operator: str) -> ResourceCategoryResponse:
+        self._assert_code_unique(payload.code)
+
+        if payload.parent_id is not None:
+            parent = self.db.execute(
+                select(MdResourceCategory).where(
+                    MdResourceCategory.id == payload.parent_id,
+                    MdResourceCategory.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if parent is None:
+                raise ResourceNotFoundError(resource="父分类", identifier=payload.parent_id)
+
+        category = MdResourceCategory(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(category)
+        self.db.flush()
+        return ResourceCategoryResponse.model_validate(category)
+
+    def update(
+        self, category_id: int, payload: ResourceCategoryUpdate, operator: str
+    ) -> ResourceCategoryResponse:
+        category = self._get_or_404(category_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=category_id)
+
+        if payload.parent_id is not None:
+            if payload.parent_id == category_id:
+                raise BusinessRuleViolationError(
+                    error_code="RESOURCE_CATEGORY_PARENT_SELF",
+                    message="父分类不能是自己",
+                )
+            parent = self.db.execute(
+                select(MdResourceCategory).where(
+                    MdResourceCategory.id == payload.parent_id,
+                    MdResourceCategory.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if parent is None:
+                raise ResourceNotFoundError(resource="父分类", identifier=payload.parent_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(category, field, value)
+        category.updated_by = operator
+        self.db.flush()
+        return ResourceCategoryResponse.model_validate(category)
+
+    def delete(self, category_id: int, operator: str) -> None:
+        category = self._get_or_404(category_id)
+
+        category.code = _build_deleted_unique_value(category.code, category.id, 30)
+        category.is_deleted = True
+        category.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 五、属性定义服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AttrDefinitionService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, attr_id: int) -> MdAttrDefinition:
+        attr = self.db.execute(
+            select(MdAttrDefinition).where(
+                MdAttrDefinition.id == attr_id,
+                MdAttrDefinition.is_deleted == False,
+            )
+            .options(selectinload(MdAttrDefinition.unit))
+        ).scalar_one_or_none()
+        if attr is None:
+            raise ResourceNotFoundError(resource="属性定义", identifier=attr_id)
+        return attr
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdAttrDefinition).where(
+            MdAttrDefinition.code == code,
+            MdAttrDefinition.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdAttrDefinition.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="ATTR_DEFINITION_CODE_DUPLICATE",
+                message=f"属性定义编码已存在：{code}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        data_type: str | None = None,
+        resource_type: str | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[AttrDefinitionResponse]:
+        stmt = select(MdAttrDefinition).where(MdAttrDefinition.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdAttrDefinition.name.ilike(f"%{keyword}%"),
+                    MdAttrDefinition.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if data_type:
+            stmt = stmt.where(MdAttrDefinition.data_type == data_type)
+        if resource_type:
+            stmt = stmt.where(
+                MdAttrDefinition.applicable_resource_types.contains(resource_type)
+            )
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(selectinload(MdAttrDefinition.unit))
+        stmt = stmt.order_by(MdAttrDefinition.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[AttrDefinitionResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, attr_id: int) -> AttrDefinitionResponse:
+        attr = self._get_or_404(attr_id)
+        return AttrDefinitionResponse.model_validate(attr)
+
+    def create(self, payload: AttrDefinitionCreate, operator: str) -> AttrDefinitionResponse:
+        self._assert_code_unique(payload.code)
+
+        if payload.unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="单位", identifier=payload.unit_id)
+
+        attr = MdAttrDefinition(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(attr)
+        self.db.flush()
+
+        attr = self.db.execute(
+            select(MdAttrDefinition)
+            .where(MdAttrDefinition.id == attr.id)
+            .options(selectinload(MdAttrDefinition.unit))
+        ).scalar_one()
+        return AttrDefinitionResponse.model_validate(attr)
+
+    def update(
+        self, attr_id: int, payload: AttrDefinitionUpdate, operator: str
+    ) -> AttrDefinitionResponse:
+        attr = self._get_or_404(attr_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=attr_id)
+
+        if payload.unit_id is not None:
+            unit = self.db.execute(
+                select(MdUnit).where(
+                    MdUnit.id == payload.unit_id,
+                    MdUnit.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+            if unit is None:
+                raise ResourceNotFoundError(resource="单位", identifier=payload.unit_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(attr, field, value)
+        attr.updated_by = operator
+        self.db.flush()
+
+        attr = self.db.execute(
+            select(MdAttrDefinition)
+            .where(MdAttrDefinition.id == attr_id)
+            .options(selectinload(MdAttrDefinition.unit))
+        ).scalar_one()
+        return AttrDefinitionResponse.model_validate(attr)
+
+    def delete(self, attr_id: int, operator: str) -> None:
+        attr = self._get_or_404(attr_id)
+
+        attr.code = _build_deleted_unique_value(attr.code, attr.id, 30)
+        attr.is_deleted = True
+        attr.updated_by = operator
+        self.db.flush()

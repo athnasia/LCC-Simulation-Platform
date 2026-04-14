@@ -26,7 +26,13 @@ from decimal import Decimal
 
 from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.models.master_data import MdUnit, MdUnitConversion, MdUnitDimension
+from app.models.master_data import (
+    MdAttrDefinition,
+    MdResourceCategory,
+    MdUnit,
+    MdUnitConversion,
+    MdUnitDimension,
+)
 from app.models.system import (
     OrgDepartment,
     SysAuditLog,
@@ -297,6 +303,52 @@ _UNIT_CONVERSION_SEEDS = [
     {"from_unit_code": "MPa", "to_unit_code": "Pa", "conversion_factor": Decimal("1000000"), "description": "1MPa = 1000000Pa"},
     {"from_unit_code": "MPa", "to_unit_code": "kPa", "conversion_factor": Decimal("1000"), "description": "1MPa = 1000kPa"},
     {"from_unit_code": "wan_yuan", "to_unit_code": "CNY", "conversion_factor": Decimal("10000"), "description": "1万元 = 10000元"},
+]
+
+
+# ── 资源分类种子数据 ───────────────────────────────────────────────────────────
+
+_RESOURCE_CATEGORY_SEEDS = [
+    {"name": "材料", "code": "MATERIAL", "resource_type": "MATERIAL", "parent_code": None, "sort_order": 1, "description": "材料分类"},
+    {"name": "金属", "code": "MATERIAL_METAL", "resource_type": "MATERIAL", "parent_code": "MATERIAL", "sort_order": 1, "description": "金属材料"},
+    {"name": "黑色金属", "code": "MATERIAL_METAL_FERROUS", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL", "sort_order": 1, "description": "黑色金属"},
+    {"name": "碳钢", "code": "MATERIAL_METAL_FERROUS_CARBON_STEEL", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL_FERROUS", "sort_order": 1, "description": "碳钢"},
+    {"name": "合金钢", "code": "MATERIAL_METAL_FERROUS_ALLOY_STEEL", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL_FERROUS", "sort_order": 2, "description": "合金钢"},
+    {"name": "有色金属", "code": "MATERIAL_METAL_NON_FERROUS", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL", "sort_order": 2, "description": "有色金属"},
+    {"name": "铜及铜合金", "code": "MATERIAL_METAL_NON_FERROUS_COPPER", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL_NON_FERROUS", "sort_order": 1, "description": "铜及铜合金"},
+    {"name": "铝及铝合金", "code": "MATERIAL_METAL_NON_FERROUS_ALUMINUM", "resource_type": "MATERIAL", "parent_code": "MATERIAL_METAL_NON_FERROUS", "sort_order": 2, "description": "铝及铝合金"},
+    {"name": "非金属", "code": "MATERIAL_NON_METAL", "resource_type": "MATERIAL", "parent_code": "MATERIAL", "sort_order": 2, "description": "非金属材料"},
+    {"name": "塑料", "code": "MATERIAL_NON_METAL_PLASTIC", "resource_type": "MATERIAL", "parent_code": "MATERIAL_NON_METAL", "sort_order": 1, "description": "塑料"},
+    {"name": "橡胶", "code": "MATERIAL_NON_METAL_RUBBER", "resource_type": "MATERIAL", "parent_code": "MATERIAL_NON_METAL", "sort_order": 2, "description": "橡胶"},
+    {"name": "复合材料", "code": "MATERIAL_COMPOSITE", "resource_type": "MATERIAL", "parent_code": "MATERIAL", "sort_order": 3, "description": "复合材料"},
+    {"name": "设备", "code": "EQUIPMENT", "resource_type": "EQUIPMENT", "parent_code": None, "sort_order": 2, "description": "设备分类"},
+    {"name": "加工设备", "code": "EQUIPMENT_PROCESSING", "resource_type": "EQUIPMENT", "parent_code": "EQUIPMENT", "sort_order": 1, "description": "加工设备"},
+    {"name": "数控机床", "code": "EQUIPMENT_PROCESSING_CNC", "resource_type": "EQUIPMENT", "parent_code": "EQUIPMENT_PROCESSING", "sort_order": 1, "description": "数控机床"},
+    {"name": "普通机床", "code": "EQUIPMENT_PROCESSING_CONVENTIONAL", "resource_type": "EQUIPMENT", "parent_code": "EQUIPMENT_PROCESSING", "sort_order": 2, "description": "普通机床"},
+    {"name": "检测设备", "code": "EQUIPMENT_INSPECTION", "resource_type": "EQUIPMENT", "parent_code": "EQUIPMENT", "sort_order": 2, "description": "检测设备"},
+    {"name": "人员", "code": "LABOR", "resource_type": "LABOR", "parent_code": None, "sort_order": 3, "description": "人员分类"},
+    {"name": "焊工", "code": "LABOR_WELDER", "resource_type": "LABOR", "parent_code": "LABOR", "sort_order": 1, "description": "焊工"},
+    {"name": "电工", "code": "LABOR_ELECTRICIAN", "resource_type": "LABOR", "parent_code": "LABOR", "sort_order": 2, "description": "电工"},
+    {"name": "工具", "code": "TOOL", "resource_type": "TOOL", "parent_code": None, "sort_order": 4, "description": "工具分类"},
+    {"name": "刀具", "code": "TOOL_CUTTING", "resource_type": "TOOL", "parent_code": "TOOL", "sort_order": 1, "description": "刀具"},
+    {"name": "夹具", "code": "TOOL_FIXTURE", "resource_type": "TOOL", "parent_code": "TOOL", "sort_order": 2, "description": "夹具"},
+]
+
+
+# ── 属性定义种子数据 ───────────────────────────────────────────────────────────
+
+_ATTR_DEFINITION_SEEDS = [
+    {"name": "密度", "code": "density", "data_type": "NUMBER", "unit_code": "kg/m3", "applicable_resource_types": ["MATERIAL"], "description": "材料密度", "is_required": False},
+    {"name": "硬度", "code": "hardness", "data_type": "NUMBER", "unit_code": None, "applicable_resource_types": ["MATERIAL"], "description": "材料硬度（HRC）", "is_required": False},
+    {"name": "抗拉强度", "code": "tensile_strength", "data_type": "NUMBER", "unit_code": "MPa", "applicable_resource_types": ["MATERIAL"], "description": "材料抗拉强度", "is_required": False},
+    {"name": "屈服强度", "code": "yield_strength", "data_type": "NUMBER", "unit_code": "MPa", "applicable_resource_types": ["MATERIAL"], "description": "材料屈服强度", "is_required": False},
+    {"name": "额定功率", "code": "rated_power", "data_type": "NUMBER", "unit_code": "kW", "applicable_resource_types": ["EQUIPMENT"], "description": "设备额定功率", "is_required": False},
+    {"name": "主轴转速", "code": "spindle_speed", "data_type": "NUMBER", "unit_code": "r/min", "applicable_resource_types": ["EQUIPMENT"], "description": "设备主轴转速", "is_required": False},
+    {"name": "工作台尺寸", "code": "worktable_size", "data_type": "STRING", "unit_code": None, "applicable_resource_types": ["EQUIPMENT"], "description": "设备工作台尺寸", "is_required": False},
+    {"name": "加工精度", "code": "machining_precision", "data_type": "NUMBER", "unit_code": "mm", "applicable_resource_types": ["EQUIPMENT"], "description": "设备加工精度", "is_required": False},
+    {"name": "能效比", "code": "efficiency_ratio", "data_type": "NUMBER", "unit_code": None, "applicable_resource_types": ["EQUIPMENT"], "description": "设备能效比", "is_required": False},
+    {"name": "表面处理", "code": "surface_treatment", "data_type": "ENUM", "unit_code": None, "applicable_resource_types": ["MATERIAL"], "description": "表面处理工艺", "is_required": False, "enum_values": ["镀锌", "喷塑", "发黑", "阳极氧化", "电镀"]},
+    {"name": "材料状态", "code": "material_status", "data_type": "ENUM", "unit_code": None, "applicable_resource_types": ["MATERIAL"], "description": "材料状态", "is_required": False, "enum_values": ["热轧", "冷轧", "退火", "正火", "淬火"]},
 ]
 
 
@@ -627,6 +679,294 @@ def _ensure_unit_conversions(db: Session, units: dict[str, MdUnit]) -> None:
         _ensure_unit_conversion(db, seed, units)
 
 
+# ── 资源分类初始化函数 ─────────────────────────────────────────────────────────
+
+def _ensure_resource_category(db: Session, seed: dict, parent_map: dict[str, int]) -> MdResourceCategory:
+    category = db.execute(
+        select(MdResourceCategory).where(
+            MdResourceCategory.code == seed["code"],
+            MdResourceCategory.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    parent_id = None
+    if seed.get("parent_code"):
+        parent_id = parent_map.get(seed["parent_code"])
+
+    if category is None:
+        category = MdResourceCategory(
+            name=seed["name"],
+            code=seed["code"],
+            resource_type=seed["resource_type"],
+            parent_id=parent_id,
+            sort_order=seed.get("sort_order", 0),
+            is_active=seed.get("is_active", True),
+            description=seed.get("description"),
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(category)
+        db.flush()
+        parent_map[category.code] = category.id
+        print(f"  [+] 创建分类：{category.name}（{category.code}）")
+        return category
+
+    changed = False
+    if category.name != seed["name"]:
+        category.name = seed["name"]
+        changed = True
+    if category.resource_type != seed["resource_type"]:
+        category.resource_type = seed["resource_type"]
+        changed = True
+    if category.parent_id != parent_id:
+        category.parent_id = parent_id
+        changed = True
+    if seed.get("sort_order") and category.sort_order != seed["sort_order"]:
+        category.sort_order = seed["sort_order"]
+        changed = True
+    if seed.get("is_active") is not None and category.is_active != seed["is_active"]:
+        category.is_active = seed["is_active"]
+        changed = True
+    if seed.get("description") and category.description != seed["description"]:
+        category.description = seed["description"]
+        changed = True
+
+    parent_map[category.code] = category.id
+
+    if changed:
+        category.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新分类：{category.name}（{category.code}）")
+    else:
+        print(f"  [=] 分类已存在，跳过：{category.name}（{category.code}）")
+
+    return category
+
+
+def _ensure_resource_categories(db: Session) -> dict[str, MdResourceCategory]:
+    parent_map: dict[str, int] = {}
+    categories: dict[str, MdResourceCategory] = {}
+
+    for seed in _RESOURCE_CATEGORY_SEEDS:
+        category = _ensure_resource_category(db, seed, parent_map)
+        categories[category.code] = category
+
+    return categories
+
+
+# ── 属性定义初始化函数 ─────────────────────────────────────────────────────────
+
+def _ensure_attr_definition(
+    db: Session,
+    seed: dict,
+    units: dict[str, MdUnit],
+) -> MdAttrDefinition:
+    attr = db.execute(
+        select(MdAttrDefinition).where(
+            MdAttrDefinition.code == seed["code"],
+            MdAttrDefinition.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    unit_id = None
+    if seed.get("unit_code"):
+        unit = units.get(seed["unit_code"])
+        if unit:
+            unit_id = unit.id
+
+    if attr is None:
+        attr = MdAttrDefinition(
+            name=seed["name"],
+            code=seed["code"],
+            data_type=seed["data_type"],
+            unit_id=unit_id,
+            applicable_resource_types=seed.get("applicable_resource_types"),
+            description=seed.get("description"),
+            is_required=seed.get("is_required", False),
+            default_value=seed.get("default_value"),
+            enum_values=seed.get("enum_values"),
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(attr)
+        db.flush()
+        print(f"  [+] 创建属性：{attr.name}（{attr.code}）")
+        return attr
+
+    changed = False
+    if attr.name != seed["name"]:
+        attr.name = seed["name"]
+        changed = True
+    if attr.data_type != seed["data_type"]:
+        attr.data_type = seed["data_type"]
+        changed = True
+    if attr.unit_id != unit_id:
+        attr.unit_id = unit_id
+        changed = True
+    if seed.get("applicable_resource_types") and attr.applicable_resource_types != seed["applicable_resource_types"]:
+        attr.applicable_resource_types = seed["applicable_resource_types"]
+        changed = True
+    if seed.get("description") and attr.description != seed["description"]:
+        attr.description = seed["description"]
+        changed = True
+    if seed.get("is_required") is not None and attr.is_required != seed["is_required"]:
+        attr.is_required = seed["is_required"]
+        changed = True
+    if seed.get("default_value") and attr.default_value != seed["default_value"]:
+        attr.default_value = seed["default_value"]
+        changed = True
+    if seed.get("enum_values") and attr.enum_values != seed["enum_values"]:
+        attr.enum_values = seed["enum_values"]
+        changed = True
+
+    if changed:
+        attr.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新属性：{attr.name}（{attr.code}）")
+    else:
+        print(f"  [=] 属性已存在，跳过：{attr.name}（{attr.code}）")
+
+    return attr
+
+
+def _ensure_attr_definitions(db: Session, units: dict[str, MdUnit]) -> None:
+    for seed in _ATTR_DEFINITION_SEEDS:
+        _ensure_attr_definition(db, seed, units)
+
+
+def _ensure_resource_category(
+    db: Session,
+    seed: dict,
+    parent_by_code: dict[str, "MdResourceCategory"],
+) -> MdResourceCategory:
+    category = db.execute(
+        select(MdResourceCategory).where(
+            MdResourceCategory.code == seed["code"],
+            MdResourceCategory.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    parent_id = None
+    if seed.get("parent_code"):
+        parent = parent_by_code.get(seed["parent_code"])
+        if parent:
+            parent_id = parent.id
+
+    if category is None:
+        category = MdResourceCategory(
+            name=seed["name"],
+            code=seed["code"],
+            resource_type=seed["resource_type"],
+            parent_id=parent_id,
+            sort_order=seed.get("sort_order", 0),
+            is_active=True,
+            description=seed.get("description"),
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(category)
+        db.flush()
+        print(f"  [+] 创建资源分类：{category.name}（{category.code}）")
+        return category
+
+    changed = False
+    for field in ("name", "sort_order", "is_active", "description"):
+        if field in seed and getattr(category, field) != seed.get(field):
+            setattr(category, field, seed.get(field))
+            changed = True
+    if category.parent_id != parent_id:
+        category.parent_id = parent_id
+        changed = True
+    if category.resource_type != seed["resource_type"]:
+        category.resource_type = seed["resource_type"]
+        changed = True
+    if changed:
+        category.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新资源分类：{category.name}（{category.code}）")
+    else:
+        print(f"  [=] 资源分类已存在，跳过：{category.name}（{category.code}）")
+
+    return category
+
+
+def _ensure_resource_categories(db: Session) -> dict[str, MdResourceCategory]:
+    categories: dict[str, MdResourceCategory] = {}
+    for seed in _RESOURCE_CATEGORY_SEEDS:
+        category = _ensure_resource_category(db, seed, categories)
+        categories[category.code] = category
+    return categories
+
+
+def _ensure_attr_definition(
+    db: Session,
+    seed: dict,
+    units: dict[str, MdUnit],
+) -> MdAttrDefinition:
+    attr = db.execute(
+        select(MdAttrDefinition).where(
+            MdAttrDefinition.code == seed["code"],
+            MdAttrDefinition.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    unit_id = None
+    if seed.get("unit_code"):
+        unit = units.get(seed["unit_code"])
+        if unit:
+            unit_id = unit.id
+
+    if attr is None:
+        attr = MdAttrDefinition(
+            name=seed["name"],
+            code=seed["code"],
+            data_type=seed["data_type"],
+            unit_id=unit_id,
+            applicable_resource_types=seed.get("applicable_resource_types"),
+            description=seed.get("description"),
+            is_required=seed.get("is_required", False),
+            default_value=seed.get("default_value"),
+            enum_values=seed.get("enum_values"),
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(attr)
+        db.flush()
+        print(f"  [+] 创建属性定义：{attr.name}（{attr.code}）")
+        return attr
+
+    changed = False
+    for field in ("name", "description", "is_required", "default_value"):
+        if field in seed and getattr(attr, field) != seed.get(field):
+            setattr(attr, field, seed.get(field))
+            changed = True
+    if attr.unit_id != unit_id:
+        attr.unit_id = unit_id
+        changed = True
+    if attr.data_type != seed["data_type"]:
+        attr.data_type = seed["data_type"]
+        changed = True
+    if seed.get("applicable_resource_types") and attr.applicable_resource_types != seed["applicable_resource_types"]:
+        attr.applicable_resource_types = seed["applicable_resource_types"]
+        changed = True
+    if seed.get("enum_values") and attr.enum_values != seed["enum_values"]:
+        attr.enum_values = seed["enum_values"]
+        changed = True
+    if changed:
+        attr.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新属性定义：{attr.name}（{attr.code}）")
+    else:
+        print(f"  [=] 属性定义已存在，跳过：{attr.name}（{attr.code}）")
+
+    return attr
+
+
+def _ensure_attr_definitions(db: Session, units: dict[str, MdUnit]) -> None:
+    for seed in _ATTR_DEFINITION_SEEDS:
+        _ensure_attr_definition(db, seed, units)
+
+
 # ── 主入口 ─────────────────────────────────────────────────────────────────────
 
 def run_seed() -> None:
@@ -638,32 +978,59 @@ def run_seed() -> None:
     try:
         print("[Step 1] 初始化根部门...")
         dept = _ensure_root_department(db)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 2] 初始化模块六权限点...")
         permissions = _ensure_system_permissions(db)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 3] 初始化内置角色...")
         roles = _ensure_builtin_roles(db)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 4] 绑定内置角色与权限...")
         _ensure_builtin_role_permissions(db, roles, permissions)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 5] 初始化管理员账号...")
         user = _ensure_admin_user(db, dept)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 6] 绑定用户与角色...")
         _ensure_user_role_binding(db, user, roles["SUPER_ADMIN"])
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 7] 初始化量纲定义...")
         dimensions = _ensure_unit_dimensions(db)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 8] 初始化单位定义...")
         units = _ensure_units(db, dimensions)
+        db.commit()
+        print("  ✓ 已提交")
 
         print("\n[Step 9] 初始化单位换算...")
         _ensure_unit_conversions(db, units)
-
         db.commit()
+        print("  ✓ 已提交")
+
+        print("\n[Step 10] 初始化资源分类...")
+        categories = _ensure_resource_categories(db)
+        db.commit()
+        print("  ✓ 已提交")
+
+        print("\n[Step 11] 初始化属性定义...")
+        _ensure_attr_definitions(db, units)
+        db.commit()
+        print("  ✓ 已提交")
+
         print("\n[Done] 初始化完成，所有数据已提交。\n")
 
     except Exception as e:

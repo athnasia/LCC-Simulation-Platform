@@ -7,6 +7,7 @@
   - 单位换算（UnitConversion）的请求/响应模型（含同量纲防呆校验）
 """
 
+import enum
 from datetime import datetime
 from decimal import Decimal
 
@@ -157,3 +158,139 @@ class UnitConversionCalculateResponse(BaseModel):
     converted_value: Decimal
     conversion_factor: Decimal
     offset: Decimal | None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 五、资源分类（ResourceCategory）
+# ═════════════════════════════════════════════════════════════════════════════
+
+class ResourceType(str, enum.Enum):
+    MATERIAL = "MATERIAL"
+    EQUIPMENT = "EQUIPMENT"
+    LABOR = "LABOR"
+    TOOL = "TOOL"
+
+
+class ResourceCategoryBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="分类名称")
+    code: str = Field(..., min_length=1, max_length=30, pattern=r"^[A-Z][A-Z0-9_]*$", description="分类编码（纯大写英文）")
+    resource_type: ResourceType = Field(..., description="资源类型")
+    parent_id: int | None = Field(None, description="父分类 ID（自关联）")
+    sort_order: int = Field(0, ge=0, description="排序值")
+    is_active: bool = Field(True, description="是否启用")
+    description: str | None = Field(None, max_length=256, description="分类描述")
+
+
+    children: list["ResourceCategoryTreeResponse"] = Field(default_factory=list, description="子分类列表")
+
+
+    class Config:
+        from_attributes = True
+
+
+class ResourceCategoryCreate(ResourceCategoryBase):
+    pass
+
+
+class ResourceCategoryUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=50)
+    resource_type: ResourceType | None = None
+    parent_id: int | None = None
+    sort_order: int | None = Field(None, ge=0)
+    is_active: bool | None = None
+    description: str | None = Field(None, max_length=256)
+
+
+    @model_validator(mode="after")
+    def validate_parent_not_self(self):
+        """校验父分类不能是自己"""
+        if self.parent_id == self.id:
+            raise ValueError("父分类不能是自己")
+        return self
+
+
+class ResourceCategoryResponse(ResourceCategoryBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
+
+    class Config:
+        from_attributes = True
+
+
+class ResourceCategoryTreeResponse(ResourceCategoryBase):
+    id: int
+    parent_id: int | None
+    children: list["ResourceCategoryTreeResponse"]
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
+
+    class Config:
+        from_attributes = True
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 六、属性定义（AttrDefinition）
+# ═════════════════════════════════════════════════════════════════════════════
+
+class DataType(str, enum.Enum):
+    STRING = "STRING"
+    NUMBER = "NUMBER"
+    BOOLEAN = "BOOLEAN"
+    JSON = "JSON"
+    DATE = "DATE"
+    ENUM = "ENUM"
+
+
+class AttrDefinitionBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="属性名称")
+    code: str = Field(..., min_length=1, max_length=30, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$", description="变量标识码（纯英文，供公式引擎解析）")
+    data_type: DataType = Field(..., description="数据类型")
+    unit_id: int | None = Field(None, description="关联单位 ID（可为空）")
+    applicable_resource_types: list[ResourceType] | None = Field(None, description="适用资源类型")
+    description: str | None = Field(None, max_length=256, description="属性描述")
+    is_required: bool = Field(False, description="是否必填")
+    default_value: str | None = Field(None, description="默认值")
+    enum_values: list[str] | None = Field(None, description="枚举值列表")
+
+    class Config:
+        from_attributes = True
+
+
+class AttrDefinitionCreate(AttrDefinitionBase):
+    pass
+
+
+class AttrDefinitionUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=50)
+    data_type: DataType | None = None
+    unit_id: int | None = None
+    applicable_resource_types: list[ResourceType] | None = None
+    description: str | None = Field(None, max_length=256)
+    is_required: bool | None = None
+    default_value: str | None = None
+    enum_values: list[str] | None = None
+
+
+    @model_validator(mode="after")
+    def validate_enum_values_for_enum_type(self):
+        """校验枚举类型必须提供枚举值列表"""
+        if self.data_type == DataType.ENUM and not self.enum_values:
+            raise ValueError("枚举类型必须提供 enum_values 字段")
+        return self
+
+
+class AttrDefinitionResponse(AttrDefinitionBase):
+    id: int
+    unit: UnitBrief | None
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
+
+    class Config:
+        from_attributes = True
