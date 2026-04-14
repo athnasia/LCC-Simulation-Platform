@@ -28,10 +28,14 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.master_data import (
     MdAttrDefinition,
+    MdEnergyCalendar,
+    MdEnergyRate,
+    MdProcess,
     MdResourceCategory,
     MdUnit,
     MdUnitConversion,
     MdUnitDimension,
+    EnergyType,
 )
 from app.models.system import (
     OrgDepartment,
@@ -349,6 +353,41 @@ _ATTR_DEFINITION_SEEDS = [
     {"name": "能效比", "code": "efficiency_ratio", "data_type": "NUMBER", "unit_code": None, "applicable_resource_types": ["EQUIPMENT"], "description": "设备能效比", "is_required": False},
     {"name": "表面处理", "code": "surface_treatment", "data_type": "ENUM", "unit_code": None, "applicable_resource_types": ["MATERIAL"], "description": "表面处理工艺", "is_required": False, "enum_values": ["镀锌", "喷塑", "发黑", "阳极氧化", "电镀"]},
     {"name": "材料状态", "code": "material_status", "data_type": "ENUM", "unit_code": None, "applicable_resource_types": ["MATERIAL"], "description": "材料状态", "is_required": False, "enum_values": ["热轧", "冷轧", "退火", "正火", "淬火"]},
+]
+
+
+# ── 标准工序种子数据 ───────────────────────────────────────────────────────────
+
+_PROCESS_SEEDS = [
+    {"name": "车削", "code": "PROC_TURNING", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "车削加工工序"},
+    {"name": "铣削", "code": "PROC_MILLING", "standard_time": Decimal("0.75"), "setup_time": Decimal("0.5"), "description": "铣削加工工序"},
+    {"name": "钻孔", "code": "PROC_DRILLING", "standard_time": Decimal("0.25"), "setup_time": Decimal("0.15"), "description": "钻孔加工工序"},
+    {"name": "磨削", "code": "PROC_GRINDING", "standard_time": Decimal("1.0"), "setup_time": Decimal("0.5"), "description": "磨削加工工序"},
+    {"name": "焊接", "code": "PROC_WELDING", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.3"), "description": "焊接工序"},
+    {"name": "装配", "code": "PROC_ASSEMBLY", "standard_time": Decimal("1.5"), "setup_time": Decimal("0.5"), "description": "装配工序"},
+    {"name": "热处理", "code": "PROC_HEAT_TREATMENT", "standard_time": Decimal("2.0"), "setup_time": Decimal("1.0"), "description": "热处理工序"},
+    {"name": "表面处理", "code": "PROC_SURFACE_TREATMENT", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "表面处理工序"},
+]
+
+
+# ── 能源单价种子数据 ───────────────────────────────────────────────────────────
+
+_ENERGY_RATE_SEEDS = [
+    {"name": "工业用电", "code": "ELEC_INDUSTRIAL", "energy_type": "ELECTRICITY", "unit_price": Decimal("0.85"), "unit_code": "kWh", "description": "工业用电基准单价"},
+    {"name": "工业用水", "code": "WATER_INDUSTRIAL", "energy_type": "WATER", "unit_price": Decimal("4.5"), "unit_code": "L", "description": "工业用水基准单价"},
+    {"name": "天然气", "code": "GAS_NATURAL", "energy_type": "GAS", "unit_price": Decimal("3.5"), "unit_code": "m3", "description": "天然气基准单价"},
+    {"name": "蒸汽", "code": "STEAM_INDUSTRIAL", "energy_type": "STEAM", "unit_price": Decimal("250.0"), "unit_code": "t", "description": "工业蒸汽基准单价"},
+    {"name": "压缩空气", "code": "AIR_COMPRESSED", "energy_type": "COMPRESSED_AIR", "unit_price": Decimal("0.15"), "unit_code": "m3", "description": "压缩空气基准单价"},
+]
+
+
+# ── 能源日历种子数据（峰平谷电价）─────────────────────────────────────────────
+
+_ENERGY_CALENDAR_SEEDS = [
+    {"energy_rate_code": "ELEC_INDUSTRIAL", "name": "峰时段", "start_time": "08:00:00", "end_time": "12:00:00", "multiplier": Decimal("1.5"), "description": "早高峰电价"},
+    {"energy_rate_code": "ELEC_INDUSTRIAL", "name": "平时段", "start_time": "12:00:00", "end_time": "18:00:00", "multiplier": Decimal("1.0"), "description": "正常电价"},
+    {"energy_rate_code": "ELEC_INDUSTRIAL", "name": "峰时段", "start_time": "18:00:00", "end_time": "22:00:00", "multiplier": Decimal("1.5"), "description": "晚高峰电价"},
+    {"energy_rate_code": "ELEC_INDUSTRIAL", "name": "谷时段", "start_time": "22:00:00", "end_time": "08:00:00", "multiplier": Decimal("0.5"), "description": "低谷电价"},
 ]
 
 

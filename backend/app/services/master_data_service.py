@@ -9,6 +9,10 @@
   - AttrDefinitionService  属性定义 CRUD（变量标识码唯一性）
   - MaterialService        材料主数据 CRUD（分类类型校验）
   - EquipmentService       设备主数据 CRUD（分类类型校验）
+  - ProcessService         标准工艺/工时库 CRUD（含复制功能）
+  - LaborService           人员技能资质矩阵 CRUD
+  - EnergyRateService      能源单价 CRUD
+  - EnergyCalendarService  能源日历 CRUD
 
 设计约定：
     1. 所有服务接收 Session 并在此层管理数据库操作，路由层只负责 I/O 转换
@@ -27,29 +31,52 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
 from app.models.master_data import (
+    EnergyType,
     MdAttrDefinition,
+    MdEnergyCalendar,
+    MdEnergyRate,
     MdEquipment,
+    MdLabor,
     MdMaterial,
+    MdProcess,
+    MdProcessResource,
     MdResourceCategory,
     MdUnit,
     MdUnitConversion,
     MdUnitDimension,
     ResourceType,
+    SkillLevel,
 )
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     AttrDefinitionCreate,
     AttrDefinitionResponse,
     AttrDefinitionUpdate,
+    EnergyCalendarCreate,
+    EnergyCalendarResponse,
+    EnergyCalendarUpdate,
+    EnergyRateCreate,
+    EnergyRateResponse,
+    EnergyRateUpdate,
     EquipmentCreate,
     EquipmentResponse,
     EquipmentUpdate,
+    LaborCreate,
+    LaborResponse,
+    LaborUpdate,
     MaterialCreate,
     MaterialResponse,
     MaterialUpdate,
+    ProcessCloneRequest,
+    ProcessCreate,
+    ProcessResourceCreate,
+    ProcessResourceResponse,
+    ProcessResponse,
+    ProcessUpdate,
     ResourceCategoryCreate,
     ResourceCategoryResponse,
     ResourceCategoryUpdate,
+    SkillLevel as SkillLevelSchema,
     UnitConversionCalculateRequest,
     UnitConversionCalculateResponse,
     UnitConversionCreate,
@@ -1240,4 +1267,625 @@ class EquipmentService:
         equipment.code = _build_deleted_unique_value(equipment.code, equipment.id, 50)
         equipment.is_deleted = True
         equipment.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 八、标准工艺/工时库服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ProcessService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, process_id: int) -> MdProcess:
+        process = self.db.execute(
+            select(MdProcess).where(
+                MdProcess.id == process_id,
+                MdProcess.is_deleted == False,
+            )
+            .options(
+                selectinload(MdProcess.category),
+                selectinload(MdProcess.resources),
+            )
+        ).scalar_one_or_none()
+        if process is None:
+            raise ResourceNotFoundError(resource="工序", identifier=process_id)
+        return process
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdProcess).where(
+            MdProcess.code == code,
+            MdProcess.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdProcess.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="PROCESS_CODE_DUPLICATE",
+                message=f"工序编码已存在：{code}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        category_id: int | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[ProcessResponse]:
+        stmt = select(MdProcess).where(MdProcess.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdProcess.name.ilike(f"%{keyword}%"),
+                    MdProcess.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if category_id is not None:
+            stmt = stmt.where(MdProcess.category_id == category_id)
+        if is_active is not None:
+            stmt = stmt.where(MdProcess.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(
+            selectinload(MdProcess.category),
+            selectinload(MdProcess.resources),
+        )
+        stmt = stmt.order_by(MdProcess.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[ProcessResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, process_id: int) -> ProcessResponse:
+        process = self._get_or_404(process_id)
+        return ProcessResponse.model_validate(process)
+
+    def create(self, payload: ProcessCreate, operator: str) -> ProcessResponse:
+        self._assert_code_unique(payload.code)
+
+        resources_data = payload.resources
+        process_data = payload.model_dump(exclude={"resources"})
+
+        process = MdProcess(
+            **process_data,
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(process)
+        self.db.flush()
+
+        for resource_data in resources_data:
+            resource = MdProcessResource(
+                process_id=process.id,
+                **resource_data.model_dump(),
+                created_by=operator,
+                updated_by=operator,
+            )
+            self.db.add(resource)
+        self.db.flush()
+
+        process = self.db.execute(
+            select(MdProcess)
+            .where(MdProcess.id == process.id)
+            .options(
+                selectinload(MdProcess.category),
+                selectinload(MdProcess.resources),
+            )
+        ).scalar_one()
+        return ProcessResponse.model_validate(process)
+
+    def update(
+        self, process_id: int, payload: ProcessUpdate, operator: str
+    ) -> ProcessResponse:
+        process = self._get_or_404(process_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=process_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(process, field, value)
+        process.updated_by = operator
+        self.db.flush()
+
+        process = self.db.execute(
+            select(MdProcess)
+            .where(MdProcess.id == process_id)
+            .options(
+                selectinload(MdProcess.category),
+                selectinload(MdProcess.resources),
+            )
+        ).scalar_one()
+        return ProcessResponse.model_validate(process)
+
+    def delete(self, process_id: int, operator: str) -> None:
+        process = self._get_or_404(process_id)
+
+        process.code = _build_deleted_unique_value(process.code, process.id, 50)
+        process.is_deleted = True
+        process.updated_by = operator
+        self.db.flush()
+
+    def clone(self, process_id: int, payload: ProcessCloneRequest, operator: str) -> ProcessResponse:
+        """复制工序及其资源挂载包"""
+        source = self._get_or_404(process_id)
+        self._assert_code_unique(payload.new_code)
+
+        new_process = MdProcess(
+            name=payload.new_name,
+            code=payload.new_code,
+            category_id=source.category_id,
+            standard_time=source.standard_time,
+            setup_time=source.setup_time,
+            is_active=True,
+            description=source.description,
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(new_process)
+        self.db.flush()
+
+        if payload.copy_resources:
+            for resource in source.resources:
+                new_resource = MdProcessResource(
+                    process_id=new_process.id,
+                    resource_type=resource.resource_type,
+                    resource_id=resource.resource_id,
+                    quantity=resource.quantity,
+                    description=resource.description,
+                    created_by=operator,
+                    updated_by=operator,
+                )
+                self.db.add(new_resource)
+            self.db.flush()
+
+        new_process = self.db.execute(
+            select(MdProcess)
+            .where(MdProcess.id == new_process.id)
+            .options(
+                selectinload(MdProcess.category),
+                selectinload(MdProcess.resources),
+            )
+        ).scalar_one()
+        return ProcessResponse.model_validate(new_process)
+
+    def add_resource(
+        self, process_id: int, payload: ProcessResourceCreate, operator: str
+    ) -> ProcessResourceResponse:
+        """为工序添加资源挂载"""
+        process = self._get_or_404(process_id)
+
+        resource = MdProcessResource(
+            process_id=process_id,
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(resource)
+        self.db.flush()
+
+        return ProcessResourceResponse.model_validate(resource)
+
+    def remove_resource(self, process_id: int, resource_id: int, operator: str) -> None:
+        """移除工序的资源挂载"""
+        resource = self.db.execute(
+            select(MdProcessResource).where(
+                MdProcessResource.id == resource_id,
+                MdProcessResource.process_id == process_id,
+            )
+        ).scalar_one_or_none()
+        if resource is None:
+            raise ResourceNotFoundError(resource="工序资源挂载", identifier=resource_id)
+        self.db.delete(resource)
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 九、人员技能资质矩阵服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class LaborService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, labor_id: int) -> MdLabor:
+        labor = self.db.execute(
+            select(MdLabor).where(
+                MdLabor.id == labor_id,
+                MdLabor.is_deleted == False,
+            )
+            .options(selectinload(MdLabor.category))
+        ).scalar_one_or_none()
+        if labor is None:
+            raise ResourceNotFoundError(resource="人员", identifier=labor_id)
+        return labor
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdLabor).where(
+            MdLabor.code == code,
+            MdLabor.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdLabor.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="LABOR_CODE_DUPLICATE",
+                message=f"人员编码已存在：{code}",
+            )
+
+    def _validate_category_type(self, category_id: int | None) -> None:
+        if category_id is None:
+            return
+        category = self.db.execute(
+            select(MdResourceCategory).where(
+                MdResourceCategory.id == category_id,
+                MdResourceCategory.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if category is None:
+            raise ResourceNotFoundError(resource="人员分类", identifier=category_id)
+        if category.resource_type != ResourceType.LABOR:
+            raise BusinessRuleViolationError(
+                error_code="LABOR_CATEGORY_TYPE_MISMATCH",
+                message=f"人员分类类型不匹配：期望 LABOR，实际为 {category.resource_type}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        labor_type: str | None = None,
+        skill_level: SkillLevelSchema | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[LaborResponse]:
+        stmt = select(MdLabor).where(MdLabor.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdLabor.name.ilike(f"%{keyword}%"),
+                    MdLabor.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if labor_type:
+            stmt = stmt.where(MdLabor.labor_type == labor_type)
+        if skill_level:
+            stmt = stmt.where(MdLabor.skill_level == skill_level)
+        if is_active is not None:
+            stmt = stmt.where(MdLabor.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(selectinload(MdLabor.category))
+        stmt = stmt.order_by(MdLabor.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[LaborResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, labor_id: int) -> LaborResponse:
+        labor = self._get_or_404(labor_id)
+        return LaborResponse.model_validate(labor)
+
+    def create(self, payload: LaborCreate, operator: str) -> LaborResponse:
+        self._assert_code_unique(payload.code)
+        self._validate_category_type(payload.category_id)
+
+        labor = MdLabor(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(labor)
+        self.db.flush()
+
+        labor = self.db.execute(
+            select(MdLabor)
+            .where(MdLabor.id == labor.id)
+            .options(selectinload(MdLabor.category))
+        ).scalar_one()
+        return LaborResponse.model_validate(labor)
+
+    def update(
+        self, labor_id: int, payload: LaborUpdate, operator: str
+    ) -> LaborResponse:
+        labor = self._get_or_404(labor_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=labor_id)
+
+        if payload.category_id is not None:
+            self._validate_category_type(payload.category_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(labor, field, value)
+        labor.updated_by = operator
+        self.db.flush()
+
+        labor = self.db.execute(
+            select(MdLabor)
+            .where(MdLabor.id == labor_id)
+            .options(selectinload(MdLabor.category))
+        ).scalar_one()
+        return LaborResponse.model_validate(labor)
+
+    def delete(self, labor_id: int, operator: str) -> None:
+        labor = self._get_or_404(labor_id)
+
+        labor.code = _build_deleted_unique_value(labor.code, labor.id, 50)
+        labor.is_deleted = True
+        labor.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 十、能源单价服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EnergyRateService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, rate_id: int) -> MdEnergyRate:
+        rate = self.db.execute(
+            select(MdEnergyRate).where(
+                MdEnergyRate.id == rate_id,
+                MdEnergyRate.is_deleted == False,
+            )
+            .options(
+                selectinload(MdEnergyRate.unit),
+                selectinload(MdEnergyRate.calendars),
+            )
+        ).scalar_one_or_none()
+        if rate is None:
+            raise ResourceNotFoundError(resource="能源单价", identifier=rate_id)
+        return rate
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdEnergyRate).where(
+            MdEnergyRate.code == code,
+            MdEnergyRate.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdEnergyRate.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="ENERGY_RATE_CODE_DUPLICATE",
+                message=f"能源编码已存在：{code}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        energy_type: EnergyType | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[EnergyRateResponse]:
+        stmt = select(MdEnergyRate).where(MdEnergyRate.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdEnergyRate.name.ilike(f"%{keyword}%"),
+                    MdEnergyRate.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if energy_type:
+            stmt = stmt.where(MdEnergyRate.energy_type == energy_type)
+        if is_active is not None:
+            stmt = stmt.where(MdEnergyRate.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(
+            selectinload(MdEnergyRate.unit),
+            selectinload(MdEnergyRate.calendars),
+        )
+        stmt = stmt.order_by(MdEnergyRate.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[EnergyRateResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, rate_id: int) -> EnergyRateResponse:
+        rate = self._get_or_404(rate_id)
+        return EnergyRateResponse.model_validate(rate)
+
+    def create(self, payload: EnergyRateCreate, operator: str) -> EnergyRateResponse:
+        self._assert_code_unique(payload.code)
+
+        calendars_data = payload.calendars
+        rate_data = payload.model_dump(exclude={"calendars"})
+
+        rate = MdEnergyRate(
+            **rate_data,
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(rate)
+        self.db.flush()
+
+        for calendar_data in calendars_data:
+            calendar = MdEnergyCalendar(
+                energy_rate_id=rate.id,
+                **calendar_data.model_dump(exclude={"energy_rate_id"}),
+                created_by=operator,
+                updated_by=operator,
+            )
+            self.db.add(calendar)
+        self.db.flush()
+
+        rate = self.db.execute(
+            select(MdEnergyRate)
+            .where(MdEnergyRate.id == rate.id)
+            .options(
+                selectinload(MdEnergyRate.unit),
+                selectinload(MdEnergyRate.calendars),
+            )
+        ).scalar_one()
+        return EnergyRateResponse.model_validate(rate)
+
+    def update(
+        self, rate_id: int, payload: EnergyRateUpdate, operator: str
+    ) -> EnergyRateResponse:
+        rate = self._get_or_404(rate_id)
+
+        if payload.code is not None:
+            self._assert_code_unique(payload.code, exclude_id=rate_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(rate, field, value)
+        rate.updated_by = operator
+        self.db.flush()
+
+        rate = self.db.execute(
+            select(MdEnergyRate)
+            .where(MdEnergyRate.id == rate_id)
+            .options(
+                selectinload(MdEnergyRate.unit),
+                selectinload(MdEnergyRate.calendars),
+            )
+        ).scalar_one()
+        return EnergyRateResponse.model_validate(rate)
+
+    def delete(self, rate_id: int, operator: str) -> None:
+        rate = self._get_or_404(rate_id)
+
+        rate.code = _build_deleted_unique_value(rate.code, rate.id, 50)
+        rate.is_deleted = True
+        rate.updated_by = operator
+        self.db.flush()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 十一、能源日历服务
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EnergyCalendarService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, calendar_id: int) -> MdEnergyCalendar:
+        calendar = self.db.execute(
+            select(MdEnergyCalendar).where(
+                MdEnergyCalendar.id == calendar_id,
+            )
+            .options(selectinload(MdEnergyCalendar.energy_rate))
+        ).scalar_one_or_none()
+        if calendar is None:
+            raise ResourceNotFoundError(resource="能源日历", identifier=calendar_id)
+        return calendar
+
+    def list(
+        self,
+        energy_rate_id: int | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[EnergyCalendarResponse]:
+        stmt = select(MdEnergyCalendar)
+
+        if energy_rate_id is not None:
+            stmt = stmt.where(MdEnergyCalendar.energy_rate_id == energy_rate_id)
+        if is_active is not None:
+            stmt = stmt.where(MdEnergyCalendar.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(selectinload(MdEnergyCalendar.energy_rate))
+        stmt = stmt.order_by(MdEnergyCalendar.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[EnergyCalendarResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, calendar_id: int) -> EnergyCalendarResponse:
+        calendar = self._get_or_404(calendar_id)
+        return EnergyCalendarResponse.model_validate(calendar)
+
+    def create(self, payload: EnergyCalendarCreate, operator: str) -> EnergyCalendarResponse:
+        rate = self.db.execute(
+            select(MdEnergyRate).where(
+                MdEnergyRate.id == payload.energy_rate_id,
+                MdEnergyRate.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if rate is None:
+            raise ResourceNotFoundError(resource="能源单价", identifier=payload.energy_rate_id)
+
+        calendar = MdEnergyCalendar(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(calendar)
+        self.db.flush()
+
+        calendar = self.db.execute(
+            select(MdEnergyCalendar)
+            .where(MdEnergyCalendar.id == calendar.id)
+            .options(selectinload(MdEnergyCalendar.energy_rate))
+        ).scalar_one()
+        return EnergyCalendarResponse.model_validate(calendar)
+
+    def update(
+        self, calendar_id: int, payload: EnergyCalendarUpdate, operator: str
+    ) -> EnergyCalendarResponse:
+        calendar = self._get_or_404(calendar_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(calendar, field, value)
+        calendar.updated_by = operator
+        self.db.flush()
+
+        calendar = self.db.execute(
+            select(MdEnergyCalendar)
+            .where(MdEnergyCalendar.id == calendar_id)
+            .options(selectinload(MdEnergyCalendar.energy_rate))
+        ).scalar_one()
+        return EnergyCalendarResponse.model_validate(calendar)
+
+    def delete(self, calendar_id: int, operator: str) -> None:
+        calendar = self._get_or_404(calendar_id)
+        self.db.delete(calendar)
         self.db.flush()

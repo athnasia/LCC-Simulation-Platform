@@ -7,12 +7,20 @@ ORM 模型包
 from app.models.base import AuditMixin, Base
 from app.models.master_data import (
     MdAttrDefinition,
+    MdEnergyCalendar,
+    MdEnergyRate,
     MdEquipment,
+    MdLabor,
     MdMaterial,
+    MdProcess,
+    MdProcessResource,
     MdResourceCategory,
     MdUnit,
     MdUnitConversion,
     MdUnitDimension,
+    EnergyType,
+    ResourceType,
+    SkillLevel,
 )
 from app.models.system import (
     OrgDepartment,
@@ -43,4 +51,13 @@ __all__ = [
     "MdAttrDefinition",
     "MdMaterial",
     "MdEquipment",
+    "MdProcess",
+    "MdProcessResource",
+    "MdLabor",
+    "MdEnergyRate",
+    "MdEnergyCalendar",
+    # 枚举类型
+    "ResourceType",
+    "SkillLevel",
+    "EnergyType",
 ]

@@ -7,12 +7,20 @@
   - MdUnitConversion     单位换算表（同量纲单位间的换算关系）
   - MdResourceCategory   资源分类表（材料、设备、人员、工具的树形分类）
   - MdAttrDefinition     属性定义表（材料/设备的动态属性定义）
+  - MdMaterial           材料主数据表（柔性建模）
+  - MdEquipment          设备主数据表（数字孪生）
+  - MdProcess            标准工艺/工时库
+  - MdProcessResource    工艺资源挂载包（多对多容器）
+  - MdLabor              人员技能资质矩阵
+  - MdEnergyRate         能源单价表
+  - MdEnergyCalendar     能源日历（峰平谷时间段）
 """
 
 import enum
 from decimal import Decimal
+from datetime import time
 
-from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, Numeric, String, Text, Time, UniqueConstraint
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +41,21 @@ class DataType(str, enum.Enum):
     JSON = "JSON"
     DATE = "DATE"
     ENUM = "ENUM"
+
+
+class SkillLevel(str, enum.Enum):
+    JUNIOR = "JUNIOR"
+    INTERMEDIATE = "INTERMEDIATE"
+    SENIOR = "SENIOR"
+    MASTER = "MASTER"
+
+
+class EnergyType(str, enum.Enum):
+    ELECTRICITY = "ELECTRICITY"
+    WATER = "WATER"
+    GAS = "GAS"
+    STEAM = "STEAM"
+    COMPRESSED_AIR = "COMPRESSED_AIR"
 
 
 # ── 量纲定义 ───────────────────────────────────────────────────────────────────
@@ -181,13 +204,34 @@ class MdMaterial(AuditMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, comment="材料名称")
     code: Mapped[str] = mapped_column(String(50), nullable=False, comment="材料编码（业务唯一标识）")
     category_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("md_resource_category.id"), nullable=True, comment="材料分类 ID"
+        BigInteger, ForeignKey("md_resource_category.id"), nullable=True, comment="材料分类 ID"
     )
     pricing_unit_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("md_unit.id"), nullable=True, comment="计价单位 ID"
+        BigInteger, ForeignKey("md_unit.id"), nullable=True, comment="计价单位 ID"
     )
     consumption_unit_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("md_unit.id"), nullable=True, comment="消耗单位 ID"
+        BigInteger, ForeignKey("md_unit.id"), nullable=True, comment="消耗单位 ID"
+    )
+    unit_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="单价（元/计价单位）"
+    )
+    loss_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2), nullable=True, comment="变动损耗率（%，如：5.5 表示 5.5%）"
+    )
+    scrap_value: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="废料回收残值（元/单位）"
+    )
+    substitute_group: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="替代料群组编码（同组材料可互换）"
+    )
+    substitute_priority: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="替代优先级（数字越小优先级越高）"
+    )
+    lcc_lifespan_months: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="理论疲劳寿命（月）"
+    )
+    lcc_maintenance_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="单次维保预估成本（元）"
     )
     dynamic_attributes: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, comment="柔性属性（JSON 对象，如：{\"density\": 7.85, \"surface_treatment\": \"镀锌\"}）"
@@ -219,13 +263,25 @@ class MdEquipment(AuditMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, comment="设备名称")
     code: Mapped[str] = mapped_column(String(50), nullable=False, comment="设备编码（业务唯一标识）")
     category_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("md_resource_category.id"), nullable=True, comment="设备分类 ID"
+        BigInteger, ForeignKey("md_resource_category.id"), nullable=True, comment="设备分类 ID"
     )
     depreciation_rate: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 4), nullable=True, comment="静态折旧费率（元/小时或元/月）"
+        Numeric(10, 4), nullable=True, comment="静态折旧费率（元/小时）"
     )
     power_consumption: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True, comment="基础能耗系数（kW/h）"
+    )
+    setup_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="换型成本（元/次）"
+    )
+    oee_target: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2), nullable=True, comment="目标 OEE（%，如：85.5）"
+    )
+    mtbf_hours: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="平均无故障时间 MTBF（小时）"
+    )
+    defect_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4), nullable=True, comment="标准缺陷率（%，如：0.5 表示 0.5%）"
     )
     dynamic_attributes: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, comment="柔性属性（JSON 对象，如：{\"rated_power\": 15.0, \"spindle_speed\": 3000}）"
@@ -238,3 +294,148 @@ class MdEquipment(AuditMixin, Base):
     category: Mapped["MdResourceCategory | None"] = relationship(
         "MdResourceCategory", foreign_keys=[category_id]
     )
+
+
+# ── 标准工艺/工时库 ───────────────────────────────────────────────────────────
+
+class MdProcess(AuditMixin, Base):
+    __tablename__ = "md_process"
+    __table_args__ = (
+        UniqueConstraint("code", "is_deleted", name="uq_md_process_code_deleted"),
+    )
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="工序名称")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="工序编码（变量标识）")
+    category_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("md_resource_category.id"), nullable=True, comment="工序分类 ID"
+    )
+    standard_time: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="标准工时（小时）"
+    )
+    setup_time: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="换产准备时间（小时）"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="工序描述")
+
+    category: Mapped["MdResourceCategory | None"] = relationship(
+        "MdResourceCategory", foreign_keys=[category_id]
+    )
+    resources: Mapped[list["MdProcessResource"]] = relationship(
+        "MdProcessResource", back_populates="process", cascade="all, delete-orphan"
+    )
+
+
+# ── 工艺资源挂载包（多对多容器）────────────────────────────────────────────────
+
+class MdProcessResource(AuditMixin, Base):
+    __tablename__ = "md_process_resource"
+
+    process_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("md_process.id"), nullable=False, comment="工序 ID"
+    )
+    resource_type: Mapped[ResourceType] = mapped_column(
+        Enum(ResourceType), nullable=False, comment="资源类型（EQUIPMENT/LABOR/MATERIAL/TOOL）"
+    )
+    resource_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, comment="资源 ID（对应各资源表主键）"
+    )
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), default=1, comment="消耗数量/投入比例"
+    )
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="备注说明")
+
+    process: Mapped["MdProcess"] = relationship("MdProcess", back_populates="resources")
+
+
+# ── 人员技能资质矩阵 ───────────────────────────────────────────────────────────
+
+class MdLabor(AuditMixin, Base):
+    __tablename__ = "md_labor"
+    __table_args__ = (
+        UniqueConstraint("code", "is_deleted", name="uq_md_labor_code_deleted"),
+    )
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="人员名称")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="人员编码")
+    labor_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="工种（如：焊工、电工、装配工）"
+    )
+    skill_level: Mapped[SkillLevel] = mapped_column(
+        Enum(SkillLevel), nullable=False, comment="技能等级（初/中/高/技师）"
+    )
+    hourly_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="标准时薪（元/小时）"
+    )
+    qualification_code: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="资质编码（用于排产约束）"
+    )
+    category_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("md_resource_category.id"), nullable=True, comment="人员分类 ID"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="人员描述")
+
+    category: Mapped["MdResourceCategory | None"] = relationship(
+        "MdResourceCategory", foreign_keys=[category_id]
+    )
+
+
+# ── 能源单价表 ─────────────────────────────────────────────────────────────────
+
+class MdEnergyRate(AuditMixin, Base):
+    __tablename__ = "md_energy_rate"
+    __table_args__ = (
+        UniqueConstraint("code", "is_deleted", name="uq_md_energy_rate_code_deleted"),
+    )
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="能源名称")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="能源编码")
+    energy_type: Mapped[EnergyType] = mapped_column(
+        Enum(EnergyType), nullable=False, comment="能源类型（电/水/气/蒸汽/压缩空气）"
+    )
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), nullable=False, comment="单价（元/单位）"
+    )
+    unit_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("md_unit.id"), nullable=True, comment="计价单位 ID"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="能源描述")
+
+    unit: Mapped["MdUnit | None"] = relationship("MdUnit")
+    calendars: Mapped[list["MdEnergyCalendar"]] = relationship(
+        "MdEnergyCalendar", back_populates="energy_rate"
+    )
+
+
+# ── 能源日历（峰平谷时间段）────────────────────────────────────────────────────
+
+class MdEnergyCalendar(AuditMixin, Base):
+    __tablename__ = "md_energy_calendar"
+
+    energy_rate_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("md_energy_rate.id"), nullable=False, comment="能源单价 ID"
+    )
+    name: Mapped[str] = mapped_column(String(50), nullable=False, comment="时段名称（如：峰时段、平时段、谷时段）")
+    start_time: Mapped[time] = mapped_column(
+        Time, nullable=False, comment="开始时间（如：08:00:00）"
+    )
+    end_time: Mapped[time] = mapped_column(
+        Time, nullable=False, comment="结束时间（如：12:00:00）"
+    )
+    multiplier: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=1.0, comment="费率系数（如：峰时段 1.5，谷时段 0.5）"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", comment="是否启用"
+    )
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="时段描述")
+
+    energy_rate: Mapped["MdEnergyRate"] = relationship("MdEnergyRate", back_populates="calendars")

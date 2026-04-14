@@ -1,4 +1,150 @@
-﻿from fastapi import APIRouter
+"""
+能源单价与日历 API 路由
+"""
 
-router = APIRouter()  # TODO: 待实现 - 主数据 - 能源日历
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
 
+from app.core.dependencies import get_current_active_user, get_db, require_permission
+from app.schemas.common import PageResult
+from app.schemas.master_data import (
+    EnergyCalendarCreate,
+    EnergyCalendarResponse,
+    EnergyCalendarUpdate,
+    EnergyRateCreate,
+    EnergyRateResponse,
+    EnergyRateUpdate,
+    EnergyType,
+)
+from app.services.master_data_service import EnergyRateService, EnergyCalendarService
+from app.models.system import SysUser
+
+router = APIRouter()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 能源单价接口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/rates", response_model=PageResult[EnergyRateResponse])
+def list_energy_rates(
+    keyword: str | None = None,
+    energy_type: EnergyType | None = None,
+    is_active: bool | None = None,
+    page: int = 1,
+    size: int = 20,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(get_current_active_user),
+):
+    return EnergyRateService(db).list(
+        keyword=keyword,
+        energy_type=energy_type,
+        is_active=is_active,
+        page=page,
+        size=size,
+    )
+
+
+@router.post("/rates", response_model=EnergyRateResponse, status_code=status.HTTP_201_CREATED)
+def create_energy_rate(
+    payload: EnergyRateCreate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
+):
+    result = EnergyRateService(db).create(payload, current_user.username)
+    db.commit()
+    return result
+
+
+@router.get("/rates/{rate_id}", response_model=EnergyRateResponse)
+def get_energy_rate(
+    rate_id: int,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(get_current_active_user),
+):
+    return EnergyRateService(db).get(rate_id)
+
+
+@router.put("/rates/{rate_id}", response_model=EnergyRateResponse)
+def update_energy_rate(
+    rate_id: int,
+    payload: EnergyRateUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
+):
+    result = EnergyRateService(db).update(rate_id, payload, current_user.username)
+    db.commit()
+    return result
+
+
+@router.delete("/rates/{rate_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_energy_rate(
+    rate_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
+):
+    EnergyRateService(db).delete(rate_id, current_user.username)
+    db.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 能源日历接口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/calendars", response_model=PageResult[EnergyCalendarResponse])
+def list_energy_calendars(
+    energy_rate_id: int | None = None,
+    is_active: bool | None = None,
+    page: int = 1,
+    size: int = 20,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(get_current_active_user),
+):
+    return EnergyCalendarService(db).list(
+        energy_rate_id=energy_rate_id,
+        is_active=is_active,
+        page=page,
+        size=size,
+    )
+
+
+@router.post("/calendars", response_model=EnergyCalendarResponse, status_code=status.HTTP_201_CREATED)
+def create_energy_calendar(
+    payload: EnergyCalendarCreate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
+):
+    result = EnergyCalendarService(db).create(payload, current_user.username)
+    db.commit()
+    return result
+
+
+@router.get("/calendars/{calendar_id}", response_model=EnergyCalendarResponse)
+def get_energy_calendar(
+    calendar_id: int,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(get_current_active_user),
+):
+    return EnergyCalendarService(db).get(calendar_id)
+
+
+@router.put("/calendars/{calendar_id}", response_model=EnergyCalendarResponse)
+def update_energy_calendar(
+    calendar_id: int,
+    payload: EnergyCalendarUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
+):
+    result = EnergyCalendarService(db).update(calendar_id, payload, current_user.username)
+    db.commit()
+    return result
+
+
+@router.delete("/calendars/{calendar_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_energy_calendar(
+    calendar_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
+):
+    EnergyCalendarService(db).delete(calendar_id, current_user.username)
+    db.commit()
