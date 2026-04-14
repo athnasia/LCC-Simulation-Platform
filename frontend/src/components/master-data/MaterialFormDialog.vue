@@ -60,6 +60,9 @@
               placeholder="请选择计价单位"
               clearable
               filterable
+              remote
+              :remote-method="searchUnits"
+              :loading="unitLoading"
               class="w-full"
             >
               <el-option
@@ -78,6 +81,9 @@
               placeholder="请选择消耗单位"
               clearable
               filterable
+              remote
+              :remote-method="searchUnits"
+              :loading="unitLoading"
               class="w-full"
             >
               <el-option
@@ -190,16 +196,36 @@
 
       <div class="dynamic-attrs-container">
         <div v-for="(attr, index) in dynamicAttrs" :key="index" class="attr-row">
-          <el-input
-            v-model="attr.key"
-            placeholder="属性名（英文标识）"
-            class="attr-key"
-            @change="updateDynamicAttributes"
-          />
+          <el-form-item
+            :prop="`dynamic_attr_${index}`"
+            :rules="[{ validator: validateAttrKey, trigger: 'blur' }]"
+            class="attr-key-form-item"
+          >
+            <el-select
+              v-model="attr.key"
+              placeholder="选择或输入属性"
+              filterable
+              allow-create
+              default-first-option
+              class="attr-key"
+              @change="onAttrKeyChange(attr)"
+            >
+              <el-option
+                v-for="def in materialAttrDefs"
+                :key="def.code"
+                :label="def.name"
+                :value="def.code"
+              >
+                <span>{{ def.name }}</span>
+                <span class="attr-code-hint">（{{ def.code }}）</span>
+              </el-option>
+            </el-select>
+          </el-form-item>
           <el-input
             v-model="attr.value"
-            placeholder="属性值"
+            :placeholder="getAttrValuePlaceholder(attr.key)"
             class="attr-value"
+            :class="{ 'is-error': attr.hasError }"
             @change="updateDynamicAttributes"
           />
           <el-button
@@ -208,6 +234,7 @@
             circle
             @click="removeAttr(index)"
           />
+          <span v-if="attr.hasError" class="error-hint">键名重复</span>
         </div>
         <el-button type="primary" link :icon="Plus" @click="addAttr">
           添加属性
@@ -227,12 +254,13 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { materialApi, unitApi } from '@/api/masterData'
-import type { Material, ResourceCategoryTree, Unit } from '@/api/masterData'
+import { materialApi, unitApi, attrDefinitionApi } from '@/api/masterData'
+import type { Material, ResourceCategoryTree, Unit, AttrDefinition, AttrDataType } from '@/api/masterData'
 
 interface DynamicAttr {
   key: string
   value: string
+  hasError: boolean
 }
 
 const props = defineProps<{
@@ -255,7 +283,10 @@ const isEdit = computed(() => !!props.data?.id)
 const loading = ref(false)
 const formRef = ref<FormInstance>()
 const unitOptions = ref<Unit[]>([])
+const unitLoading = ref(false)
 const dynamicAttrs = ref<DynamicAttr[]>([])
+const materialAttrDefs = ref<AttrDefinition[]>([])
+const attrDefMap = ref<Map<string, AttrDefinition>>(new Map())
 
 const form = reactive({
   name: '',
@@ -299,9 +330,32 @@ function filterCategoryTree(tree: ResourceCategoryTree[], resourceType: string):
     }))
 }
 
-async function loadUnits() {
-  const res = await unitApi.list({ size: 200, is_active: true })
-  unitOptions.value = res.data.items
+async function loadUnits(keyword?: string) {
+  unitLoading.value = true
+  try {
+    const res = await unitApi.list({ size: 50, is_active: true, keyword })
+    unitOptions.value = res.data.items
+  } finally {
+    unitLoading.value = false
+  }
+}
+
+function searchUnits(keyword: string) {
+  loadUnits(keyword)
+}
+
+async function loadMaterialAttrDefs() {
+  try {
+    const res = await attrDefinitionApi.list({ size: 100 })
+    const allDefs = res.data.items
+    materialAttrDefs.value = allDefs.filter(
+      (def) => def.applicable_resource_types?.includes('MATERIAL')
+    )
+    attrDefMap.value = new Map(materialAttrDefs.value.map((def) => [def.code, def]))
+  } catch {
+    materialAttrDefs.value = []
+    attrDefMap.value = new Map()
+  }
 }
 
 function parseDynamicAttributes(attrs: Record<string, unknown> | null) {
@@ -309,26 +363,126 @@ function parseDynamicAttributes(attrs: Record<string, unknown> | null) {
   return Object.entries(attrs).map(([key, value]) => ({
     key,
     value: String(value),
+    hasError: false,
   }))
 }
 
+function getAttrDataType(key: string): AttrDataType | null {
+  const def = attrDefMap.value.get(key)
+  return def?.data_type ?? null
+}
+
+function getAttrValuePlaceholder(key: string): string {
+  const def = attrDefMap.value.get(key)
+  if (!def) return '属性值'
+  const typeHints: Record<AttrDataType, string> = {
+    STRING: '文本',
+    NUMBER: '数字',
+    BOOLEAN: 'true/false',
+    JSON: 'JSON 格式',
+    DATE: '日期 (YYYY-MM-DD)',
+    ENUM: def.enum_values?.join(' / ') ?? '枚举值',
+  }
+  return typeHints[def.data_type] ?? '属性值'
+}
+
+function convertValueByType(value: string, dataType: AttrDataType): unknown {
+  if (!value.trim()) return value
+
+  switch (dataType) {
+    case 'NUMBER': {
+      const num = Number(value)
+      return isNaN(num) ? value : num
+    }
+    case 'BOOLEAN': {
+      if (value.toLowerCase() === 'true') return true
+      if (value.toLowerCase() === 'false') return false
+      return value
+    }
+    case 'JSON': {
+      try {
+        return JSON.parse(value)
+      } catch {
+        return value
+      }
+    }
+    case 'DATE': {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+      if (dateRegex.test(value)) return value
+      return value
+    }
+    case 'ENUM':
+    case 'STRING':
+    default:
+      return value
+  }
+}
+
+function validateAttrKey(_rule: unknown, value: string, callback: (error?: Error) => void) {
+  if (!value || !value.trim()) {
+    callback()
+    return
+  }
+  const trimmedKey = value.trim()
+  const count = dynamicAttrs.value.filter((attr) => attr.key.trim() === trimmedKey).length
+  if (count > 1) {
+    callback(new Error('键名重复'))
+  } else {
+    callback()
+  }
+}
+
+function checkDuplicateKeys() {
+  const keyCount = new Map<string, number>()
+  dynamicAttrs.value.forEach((attr) => {
+    const key = attr.key.trim()
+    if (key) {
+      keyCount.set(key, (keyCount.get(key) ?? 0) + 1)
+    }
+  })
+
+  dynamicAttrs.value.forEach((attr) => {
+    const key = attr.key.trim()
+    attr.hasError = keyCount.get(key)! > 1
+  })
+}
+
+function onAttrKeyChange(attr: DynamicAttr) {
+  checkDuplicateKeys()
+  updateDynamicAttributes()
+}
+
 function updateDynamicAttributes() {
+  checkDuplicateKeys()
+
+  const hasErrors = dynamicAttrs.value.some((attr) => attr.hasError)
+  if (hasErrors) {
+    form.dynamic_attributes = null
+    return
+  }
+
   const result: Record<string, unknown> = {}
   for (const attr of dynamicAttrs.value) {
-    if (attr.key.trim()) {
-      const numValue = Number(attr.value)
-      result[attr.key.trim()] = isNaN(numValue) ? attr.value : numValue
+    const key = attr.key.trim()
+    if (key && attr.value.trim()) {
+      const dataType = getAttrDataType(key)
+      if (dataType) {
+        result[key] = convertValueByType(attr.value, dataType)
+      } else {
+        result[key] = attr.value
+      }
     }
   }
   form.dynamic_attributes = Object.keys(result).length > 0 ? result : null
 }
 
 function addAttr() {
-  dynamicAttrs.value.push({ key: '', value: '' })
+  dynamicAttrs.value.push({ key: '', value: '', hasError: false })
 }
 
 function removeAttr(index: number) {
   dynamicAttrs.value.splice(index, 1)
+  checkDuplicateKeys()
   updateDynamicAttributes()
 }
 
@@ -362,13 +516,24 @@ watch(
 watch(
   () => props.modelValue,
   (val) => {
-    if (val && unitOptions.value.length === 0) {
-      loadUnits()
+    if (val) {
+      if (unitOptions.value.length === 0) {
+        loadUnits()
+      }
+      if (materialAttrDefs.value.length === 0) {
+        loadMaterialAttrDefs()
+      }
     }
   },
 )
 
 async function handleSubmit() {
+  const hasDuplicateKeys = dynamicAttrs.value.some((attr) => attr.hasError)
+  if (hasDuplicateKeys) {
+    ElMessage.error('存在重复的属性键名，请修正后再提交')
+    return
+  }
+
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
@@ -437,11 +602,31 @@ function resetForm() {
   align-items: center;
 }
 
+.attr-key-form-item {
+  margin-bottom: 0;
+}
+
 .attr-key {
   width: 180px;
 }
 
 .attr-value {
   flex: 1;
+}
+
+.attr-code-hint {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.error-hint {
+  color: #f56c6c;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.attr-value.is-error :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #f56c6c inset;
 }
 </style>

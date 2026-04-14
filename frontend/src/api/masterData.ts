@@ -80,6 +80,63 @@ export const resourceCategoryApi = {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 属性定义 AttrDefinition
+// ═══════════════════════════════════════════════════════════════
+
+export type AttrDataType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'JSON' | 'DATE' | 'ENUM'
+
+export interface AttrDefinition {
+  id: number
+  name: string
+  code: string
+  data_type: AttrDataType
+  unit_id: number | null
+  applicable_resource_types: ResourceType[]
+  description: string | null
+  is_required: boolean
+  default_value: string | null
+  enum_values: string[] | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AttrDefinitionQuery extends PageQuery {
+  data_type?: AttrDataType
+  is_active?: boolean
+}
+
+export interface AttrDefinitionCreate {
+  name: string
+  code: string
+  data_type: AttrDataType
+  unit_id?: number | null
+  applicable_resource_types?: ResourceType[]
+  description?: string | null
+  is_required?: boolean
+  default_value?: string | null
+  enum_values?: string[] | null
+}
+
+export type AttrDefinitionUpdate = Partial<AttrDefinitionCreate>
+
+export const attrDefinitionApi = {
+  list: (params: AttrDefinitionQuery): Promise<AxiosResponse<PageResult<AttrDefinition>>> =>
+    request.get('/master-data/dict-templates/attributes', { params }),
+
+  create: (data: AttrDefinitionCreate): Promise<AxiosResponse<AttrDefinition>> =>
+    request.post('/master-data/dict-templates/attributes', data),
+
+  detail: (id: number): Promise<AxiosResponse<AttrDefinition>> =>
+    request.get(`/master-data/dict-templates/attributes/${id}`),
+
+  update: (id: number, data: AttrDefinitionUpdate): Promise<AxiosResponse<AttrDefinition>> =>
+    request.put(`/master-data/dict-templates/attributes/${id}`, data),
+
+  remove: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/master-data/dict-templates/attributes/${id}`),
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 二、单位 Unit
 // ═══════════════════════════════════════════════════════════════
 
