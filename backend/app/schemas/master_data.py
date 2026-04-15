@@ -195,7 +195,7 @@ class ResourceType(str, enum.Enum):
 
 class ResourceCategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="分类名称")
-    code: str = Field(..., min_length=1, max_length=30, pattern=r"^[A-Z][A-Z0-9_]*$", description="分类编码（纯大写英文）")
+    code: str = Field(..., min_length=1, max_length=50, pattern=r"^[A-Z][A-Z0-9_]*$", description="分类编码（纯大写英文）")
     resource_type: ResourceType = Field(..., description="资源类型")
     parent_id: int | None = Field(None, description="父分类 ID（自关联）")
     sort_order: int = Field(0, ge=0, description="排序值")
