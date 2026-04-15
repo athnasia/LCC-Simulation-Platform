@@ -187,10 +187,10 @@
       </el-header>
 
       <!-- 主内容区 -->
-      <el-main class="main-content bg-gray-50 overflow-auto">
+      <el-main class="main-content bg-gray-50">
         <router-view v-slot="{ Component, route }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" :key="route.fullPath" />
+            <component :is="Component" :key="route.fullPath" class="flex-1 min-h-0 w-full" />
           </transition>
         </router-view>
       </el-main>
@@ -206,6 +206,7 @@ import {
   User, Edit, FolderOpened, Connection, Money, Tickets, Document,
   DataLine, VideoPlay, Tools, Avatar, Key, List, DArrowLeft,
   DArrowRight, Location, UserFilled, ArrowDown, SwitchButton,
+  Lightning, TrendCharts
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -270,6 +271,10 @@ async function handleCommand(cmd: string) {
 
 .main-content {
   padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 菜单深色定制 */

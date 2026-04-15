@@ -1,13 +1,13 @@
 <template>
-  <div class="flex gap-4 h-full">
-    <el-card class="w-1/5 flex-shrink-0" shadow="never" body-style="padding:12px">
+  <div class="flex flex-col md:flex-row gap-4 h-full w-full min-h-0">
+    <el-card class="w-full md:w-64 flex-shrink-0 flex flex-col h-[300px] md:h-auto" shadow="never" :body-style="{ padding: '12px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }">
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium">材料分类</span>
         </div>
       </template>
 
-      <el-scrollbar max-height="calc(100vh - 220px)">
+      <el-scrollbar class="flex-1 min-h-0">
         <el-tree
           v-if="categoryTree.length > 0"
           :data="categoryTree"
@@ -50,12 +50,13 @@
         </div>
       </el-card>
 
-      <el-card shadow="never" class="flex-1" body-style="padding:0">
+      <el-card shadow="never" class="flex-1 flex flex-col min-h-0" :body-style="{ padding: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }">
         <el-table
           v-loading="tableLoading"
           :data="materialList"
           stripe
-          class="w-full"
+          class="w-full flex-1"
+          height="100%"
         >
           <el-table-column prop="code" label="编码" width="120" />
           <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
@@ -274,9 +275,9 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 
-function formatPrice(value: number | null) {
-  if (value === null) return '-'
-  return `¥${value.toFixed(4)}`
+function formatPrice(value: number | string | null) {
+  if (value === null || value === undefined) return '-'
+  return `¥${Number(value).toFixed(4)}`
 }
 
 function getDisplayAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
