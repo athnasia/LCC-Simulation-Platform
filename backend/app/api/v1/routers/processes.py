@@ -47,7 +47,6 @@ def create_process(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "write")),
 ):
     result = ProcessService(db).create(payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -68,7 +67,6 @@ def update_process(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "write")),
 ):
     result = ProcessService(db).update(process_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -79,7 +77,6 @@ def delete_process(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "delete")),
 ):
     ProcessService(db).delete(process_id, current_user.username)
-    db.commit()
 
 
 @router.post("/{process_id}/clone", response_model=ProcessResponse, status_code=status.HTTP_201_CREATED)
@@ -90,7 +87,6 @@ def clone_process(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "write")),
 ):
     result = ProcessService(db).clone(process_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -102,7 +98,6 @@ def add_process_resource(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "write")),
 ):
     result = ProcessService(db).add_resource(process_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -114,4 +109,3 @@ def remove_process_resource(
     current_user: SysUser = Depends(require_permission("/master-data/processes", "write")),
 ):
     ProcessService(db).remove_resource(process_id, resource_id, current_user.username)
-    db.commit()

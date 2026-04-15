@@ -87,7 +87,7 @@ class SysUser(AuditMixin, Base):
         "SysRole",
         secondary="sys_user_role",
         viewonly=True,
-        lazy="select",
+        lazy="selectin",
     )
     user_roles: Mapped[list["SysUserRole"]] = relationship(
         "SysUserRole", back_populates="user", cascade="all, delete-orphan"
@@ -112,7 +112,7 @@ class SysRole(AuditMixin, Base):
         "SysPermission",
         secondary="sys_role_permission",
         viewonly=True,
-        lazy="select",
+        lazy="selectin",
     )
     role_permissions: Mapped[list["SysRolePermission"]] = relationship(
         "SysRolePermission", back_populates="role", cascade="all, delete-orphan"

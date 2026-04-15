@@ -124,8 +124,54 @@ pnpm dev
 | 服务 | 端口 | 备注 |
 |---|---|---|
 | FastAPI 后端 | **8001** | 8000 曾被占用，改用 8001 |
+| MySQL（当前唯一开发主库） | **33306** | 当前由 `lcc-app-mysql-1` 提供，宿主机访问口径保持不变 |
+| Redis（当前唯一开发实例） | **63799** | 当前由 `lcc-app-redis-1` 提供，Celery Broker/Result 复用此实例的不同 DB |
 | Vite 前端 | **5173** | Vite 默认端口 |
 | API 代理 | `/api` → `8001` | `vite.config.ts` 已配置 `changeOrigin: true` |
+
+### 7.3.1 当前本地 Docker 拓扑（已验证）
+
+当前本地开发环境采用“**宿主机 API + Docker 数据服务/异步服务**”混合模式：
+
+| 组件 | 当前运行位置 | 容器名 / 进程 | 说明 |
+|---|---|---|---|
+| FastAPI API | **宿主机** | `backend\.venv\Scripts\uvicorn.exe` | 对外提供 `127.0.0.1:8001` |
+| MySQL | **Docker** | `lcc-app-mysql-1` | 当前唯一开发主库，宿主机通过 `127.0.0.1:33306` 访问 |
+| Redis | **Docker** | `lcc-app-redis-1` | 当前唯一 Redis，宿主机通过 `127.0.0.1:63799` 访问 |
+| Celery Worker | **Docker** | `lcc-app-worker-1` | 通过 `app.tasks:celery_app` 启动，执行异步任务 |
+
+### 7.3.2 Docker 相关硬规则（已验证）
+
+1. **当前唯一 MySQL 数据源是 `lcc-app-mysql-1`**
+	- 业务数据已从旧 `lcc-mysql` 迁移完成。
+	- `backend/.env` 当前必须使用：`DB_HOST=127.0.0.1`、`DB_PORT=33306`、`DB_USER=lcc_user`、`DB_PASSWORD=lcc_password`、`DB_NAME=lcc`。
+	- 不得再次启动旧 `lcc-mysql` 容器，否则会造成双主库和数据漂移。
+
+2. **当前唯一 Redis 实例是 `lcc-app-redis-1`**
+	- 旧 `lcc-redis` 已废弃，不应恢复。
+	- 宿主机和 Worker 都统一通过 `63799/6379` 这套口径访问 Redis。
+
+3. **`lcc-app-worker-1` 不是 API 容器**
+	- 它只负责 Celery 异步任务消费，不提供 HTTP API。
+	- 当前最小验证任务为 `app.tasks.ping`，容器内执行结果应返回 `pong`。
+
+4. **当前 Docker Compose 仅应承载数据服务和异步服务**
+	- 默认保留 `mysql`、`redis`、`worker`。
+	- 若后续把 API 也切入 Docker，需要明确说明是“全容器模式”，并重新校验 `8001/33306/63799` 的端口接管关系。
+
+### 7.3.3 数据迁移与容器切换规则（已验证）
+
+1. **旧库到新库的迁移不能只靠 Alembic**
+	- Alembic 只负责结构版本，不负责搬运真实业务数据。
+	- 本项目已验证的迁移方式是：先用 `mysqldump` 导出旧库，再导入到新的 compose MySQL，然后校验 `alembic_version` 与关键表计数。
+
+2. **当前开发库版本基线**
+	- `alembic_version` 应为 `f6g7h8i9j0k1 (head)`。
+	- 若版本不一致，先排查是否连接错库，而不是直接执行迁移脚本。
+
+3. **容器切换时必须先保留 SQL 备份**
+	- 当前已验证的备份文件位置：`storage/db-backups/lcc_pre_compose_migration_20260415.sql`。
+	- 在未确认新库可用前，禁止删除回滚备份。
 
 ### 7.4 默认管理员凭据
 - 用户名：`admin`

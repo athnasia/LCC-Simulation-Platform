@@ -3,12 +3,14 @@
 FastAPI 应用入口
 
 职责：
-  - 创建 FastAPI 实例
-  - 注册全部领域路由（/api/v1/...）
-  - 挂载全局中间件（CORS、请求日志）
-  - 注册统一异常处理器
-  - 管理应用启动 / 关闭的资源生命周期
+    - 创建 FastAPI 实例
+    - 注册全部领域路由（/api/v1/...）
+    - 挂载全局中间件（CORS、请求日志）
+    - 注册统一异常处理器
+    - 管理应用启动 / 关闭的资源生命周期
 """
+
+import asyncio
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -18,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import engine, init_db
 from app.core.exceptions import (
     AppBaseException,
     UnitConversionChainBrokenError,
@@ -57,7 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # ── 关闭阶段 ────────────────────────────────────────────────────────────────
-    # SQLAlchemy AsyncEngine 在 init_db 中已通过模块级单例管理，此处仅作扩展预留
+    await asyncio.to_thread(engine.dispose)
+    # TODO: 在引入 Redis 连接池后，在此补充 close / disconnect 逻辑。
 
 
 # ── FastAPI 实例 ───────────────────────────────────────────────────────────────
@@ -85,16 +88,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.middleware("http")
-async def disable_api_cache(request: Request, call_next):
-    response = await call_next(request)
-    if request.url.path.startswith("/api/v1/"):
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-    return response
 
 
 # ── 统一异常处理器 ─────────────────────────────────────────────────────────────

@@ -52,7 +52,6 @@ def create_energy_rate(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyRateService(db).create(payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -73,7 +72,6 @@ def update_energy_rate(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyRateService(db).update(rate_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -84,7 +82,6 @@ def delete_energy_rate(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
 ):
     EnergyRateService(db).delete(rate_id, current_user.username)
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -115,7 +112,6 @@ def create_energy_calendar(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyCalendarService(db).create(payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -136,7 +132,6 @@ def update_energy_calendar(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyCalendarService(db).update(calendar_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -147,4 +142,3 @@ def delete_energy_calendar(
     current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
 ):
     EnergyCalendarService(db).delete(calendar_id, current_user.username)
-    db.commit()

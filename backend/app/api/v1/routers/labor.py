@@ -47,7 +47,6 @@ def create_labor(
     current_user: SysUser = Depends(require_permission("/master-data/labor", "write")),
 ):
     result = LaborService(db).create(payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -68,7 +67,6 @@ def update_labor(
     current_user: SysUser = Depends(require_permission("/master-data/labor", "write")),
 ):
     result = LaborService(db).update(labor_id, payload, current_user.username)
-    db.commit()
     return result
 
 
@@ -79,4 +77,3 @@ def delete_labor(
     current_user: SysUser = Depends(require_permission("/master-data/labor", "delete")),
 ):
     LaborService(db).delete(labor_id, current_user.username)
-    db.commit()

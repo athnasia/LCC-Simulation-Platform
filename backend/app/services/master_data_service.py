@@ -24,7 +24,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
+from typing import TypedDict
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -89,6 +91,22 @@ from app.schemas.master_data import (
     UnitResponse,
     UnitUpdate,
 )
+
+
+class ResourceCategoryTreeNode(TypedDict):
+    id: int
+    name: str
+    code: str
+    resource_type: ResourceType
+    parent_id: int | None
+    sort_order: int
+    is_active: bool
+    description: str | None
+    children: list["ResourceCategoryTreeNode"]
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    updated_by: str | None
 
 
 def _build_deleted_unique_value(value: str | None, record_id: int, max_length: int) -> str | None:
@@ -534,13 +552,6 @@ class UnitConversionService:
             ).scalar_one_or_none()
 
             if reverse_conversion is not None:
-                if reverse_conversion.offset is not None and reverse_conversion.offset != 0:
-                    raise BusinessRuleViolationError(
-                        error_code="UNIT_CONVERSION_NON_LINEAR_UNSUPPORTED",
-                        message="当前版本仅支持线性换算，不支持带偏移量的非线性换算",
-                        detail={"offset": str(reverse_conversion.offset)},
-                    )
-
                 reverse_factor = Decimal("1") / reverse_conversion.conversion_factor
                 converted_value = payload.value * reverse_factor
 
@@ -560,13 +571,6 @@ class UnitConversionService:
                     "from_unit_id": payload.from_unit_id,
                     "to_unit_id": payload.to_unit_id,
                 },
-            )
-
-        if conversion.offset is not None and conversion.offset != 0:
-            raise BusinessRuleViolationError(
-                error_code="UNIT_CONVERSION_NON_LINEAR_UNSUPPORTED",
-                message="当前版本仅支持线性换算，不支持带偏移量的非线性换算",
-                detail={"offset": str(conversion.offset)},
             )
 
         converted_value = payload.value * conversion.conversion_factor
@@ -614,51 +618,38 @@ class ResourceCategoryService:
                 message=f"资源分类编码已存在：{code}",
             )
 
-    def _build_tree(self, categories: list[MdResourceCategory]) -> list[dict]:
-        """将扁平列表组装成树状结构"""
-        category_map = {cat.id: cat for cat in categories}
-        root_categories = []
-        
-        for cat in categories:
-            if cat.parent_id is None:
-                cat_dict = {
-                    "id": cat.id,
-                    "name": cat.name,
-                    "code": cat.code,
-                    "resource_type": cat.resource_type,
-                    "parent_id": cat.parent_id,
-                    "sort_order": cat.sort_order,
-                    "is_active": cat.is_active,
-                    "description": cat.description,
-                    "children": [],
-                    "created_at": cat.created_at,
-                    "updated_at": cat.updated_at,
-                    "created_by": cat.created_by,
-                    "updated_by": cat.updated_by,
-                }
-                root_categories.append(cat_dict)
-            else:
-                parent = category_map.get(cat.parent_id)
-                if parent:
-                    if not hasattr(parent, "children"):
-                        parent.children = []
-                    cat_dict = {
-                        "id": cat.id,
-                        "name": cat.name,
-                        "code": cat.code,
-                        "resource_type": cat.resource_type,
-                        "parent_id": cat.parent_id,
-                        "sort_order": cat.sort_order,
-                        "is_active": cat.is_active,
-                        "description": cat.description,
-                        "children": [],
-                        "created_at": cat.created_at,
-                        "updated_at": cat.updated_at,
-                        "created_by": cat.created_by,
-                        "updated_by": cat.updated_by,
-                    }
-                    parent.children.append(cat_dict)
-        
+    def _build_tree(self, categories: list[MdResourceCategory]) -> list[ResourceCategoryTreeNode]:
+        """将扁平列表组装成纯字典树结构，避免向 ORM 关系集合写入非模型对象。"""
+        category_map: dict[int, ResourceCategoryTreeNode] = {
+            category.id: {
+                "id": category.id,
+                "name": category.name,
+                "code": category.code,
+                "resource_type": category.resource_type,
+                "parent_id": category.parent_id,
+                "sort_order": category.sort_order,
+                "is_active": category.is_active,
+                "description": category.description,
+                "children": [],
+                "created_at": category.created_at,
+                "updated_at": category.updated_at,
+                "created_by": category.created_by,
+                "updated_by": category.updated_by,
+            }
+            for category in categories
+        }
+        root_categories: list[ResourceCategoryTreeNode] = []
+
+        for category in categories:
+            node = category_map[category.id]
+            if category.parent_id is None:
+                root_categories.append(node)
+                continue
+
+            parent = category_map.get(category.parent_id)
+            if parent is not None:
+                parent["children"].append(node)
+
         return root_categories
 
     def list(
@@ -704,7 +695,7 @@ class ResourceCategoryService:
     def get_tree(
         self,
         resource_type: str | None = None,
-    ) -> list[dict]:
+    ) -> list[ResourceCategoryTreeNode]:
         """获取树状结构的分类列表"""
         stmt = select(MdResourceCategory).where(
             MdResourceCategory.is_deleted == False,

@@ -23,7 +23,14 @@ export interface PageQuery {
 // 一、资源分类 ResourceCategory
 // ═══════════════════════════════════════════════════════════════
 
-export type ResourceType = 'MATERIAL' | 'EQUIPMENT' | 'LABOR' | 'TOOL'
+export const ResourceType = {
+  MATERIAL: 'MATERIAL',
+  EQUIPMENT: 'EQUIPMENT',
+  LABOR: 'LABOR',
+  TOOL: 'TOOL',
+} as const
+
+export type ResourceType = (typeof ResourceType)[keyof typeof ResourceType]
 
 export interface ResourceCategory {
   id: number

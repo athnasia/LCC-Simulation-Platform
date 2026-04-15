@@ -20,10 +20,6 @@ from app.services.master_data_service import EquipmentService
 router = APIRouter()
 
 
-def _commit_write(db: Session) -> None:
-    db.commit()
-
-
 @router.get(
     "",
     response_model=PageResult[EquipmentResponse],
@@ -62,7 +58,6 @@ def create_equipment(
 ) -> EquipmentResponse:
     operator = str(current_user.id)
     result = EquipmentService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -93,7 +88,6 @@ def update_equipment(
 ) -> EquipmentResponse:
     operator = str(current_user.id)
     result = EquipmentService(db).update(equipment_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -110,4 +104,3 @@ def delete_equipment(
 ) -> None:
     operator = str(current_user.id)
     EquipmentService(db).delete(equipment_id, operator)
-    _commit_write(db)

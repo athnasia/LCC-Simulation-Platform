@@ -21,7 +21,7 @@ from datetime import datetime, time
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -124,13 +124,25 @@ class UnitConversionBase(BaseModel):
 
 
 class UnitConversionCreate(UnitConversionBase):
-    pass
+    @model_validator(mode="after")
+    def validate_linear_only(self):
+        """当前版本仅允许线性换算规则入库"""
+        if self.offset is not None and self.offset != 0:
+            raise ValueError("当前版本仅支持线性换算，offset 必须为 0 或为空")
+        return self
 
 
 class UnitConversionUpdate(BaseModel):
     conversion_factor: Decimal | None = Field(None, gt=0)
     offset: Decimal | None = None
     description: str | None = Field(None, max_length=256)
+
+    @model_validator(mode="after")
+    def validate_linear_only(self):
+        """当前版本仅允许线性换算规则入库"""
+        if self.offset is not None and self.offset != 0:
+            raise ValueError("当前版本仅支持线性换算，offset 必须为 0 或为空")
+        return self
 
 
 class UnitConversionResponse(BaseModel):
@@ -633,7 +645,7 @@ class EnergyCalendarBase(BaseModel):
     is_active: bool = Field(True, description="是否启用")
     description: str | None = Field(None, max_length=256, description="时段描述")
 
-    @property
+    @computed_field(return_type=bool)
     def is_cross_day(self) -> bool:
         """判断是否为跨天时段（如 23:00 -> 次日 07:00）"""
         return self.start_time >= self.end_time

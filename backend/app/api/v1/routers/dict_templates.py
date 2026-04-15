@@ -52,10 +52,6 @@ from app.services.master_data_service import (
 router = APIRouter()
 
 
-def _commit_write(db: Session) -> None:
-    db.commit()
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # 一、量纲定义接口
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -90,7 +86,6 @@ def create_dimension(
 ) -> UnitDimensionResponse:
     operator = str(current_user.id)
     result = UnitDimensionService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -121,7 +116,6 @@ def update_dimension(
 ) -> UnitDimensionResponse:
     operator = str(current_user.id)
     result = UnitDimensionService(db).update(dimension_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -138,7 +132,6 @@ def delete_dimension(
 ) -> None:
     operator = str(current_user.id)
     UnitDimensionService(db).delete(dimension_id, operator)
-    _commit_write(db)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -179,7 +172,6 @@ def create_unit(
 ) -> UnitResponse:
     operator = str(current_user.id)
     result = UnitService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -210,7 +202,6 @@ def update_unit(
 ) -> UnitResponse:
     operator = str(current_user.id)
     result = UnitService(db).update(unit_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -227,7 +218,6 @@ def delete_unit(
 ) -> None:
     operator = str(current_user.id)
     UnitService(db).delete(unit_id, operator)
-    _commit_write(db)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -268,7 +258,6 @@ def create_conversion(
 ) -> UnitConversionResponse:
     operator = str(current_user.id)
     result = UnitConversionService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -299,7 +288,6 @@ def update_conversion(
 ) -> UnitConversionResponse:
     operator = str(current_user.id)
     result = UnitConversionService(db).update(conversion_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -316,7 +304,6 @@ def delete_conversion(
 ) -> None:
     operator = str(current_user.id)
     UnitConversionService(db).delete(conversion_id, operator)
-    _commit_write(db)
 
 
 @router.post(
@@ -375,7 +362,7 @@ def get_category_tree(
     _: SysUser = Depends(require_permission("/master-data/dict-templates", "read")),
 ) -> list[ResourceCategoryTreeResponse]:
     tree_data = ResourceCategoryService(db).get_tree(resource_type=resource_type)
-    return [ResourceCategoryTreeResponse(**node) for node in tree_data]
+    return [ResourceCategoryTreeResponse.model_validate(node) for node in tree_data]
 
 
 @router.post(
@@ -392,7 +379,6 @@ def create_category(
 ) -> ResourceCategoryResponse:
     operator = str(current_user.id)
     result = ResourceCategoryService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -423,7 +409,6 @@ def update_category(
 ) -> ResourceCategoryResponse:
     operator = str(current_user.id)
     result = ResourceCategoryService(db).update(category_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -440,7 +425,6 @@ def delete_category(
 ) -> None:
     operator = str(current_user.id)
     ResourceCategoryService(db).delete(category_id, operator)
-    _commit_write(db)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -485,7 +469,6 @@ def create_attribute(
 ) -> AttrDefinitionResponse:
     operator = str(current_user.id)
     result = AttrDefinitionService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -516,7 +499,6 @@ def update_attribute(
 ) -> AttrDefinitionResponse:
     operator = str(current_user.id)
     result = AttrDefinitionService(db).update(attr_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -533,4 +515,3 @@ def delete_attribute(
 ) -> None:
     operator = str(current_user.id)
     AttrDefinitionService(db).delete(attr_id, operator)
-    _commit_write(db)

@@ -35,8 +35,6 @@ from app.services.system_service import (
 )
 
 router = APIRouter()
-def _commit_write(db: Session) -> None:
-    db.commit()
 
 
 @router.get(
@@ -79,7 +77,6 @@ def create_department(
         detail={"name": result.name, "code": result.code},
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -119,7 +116,6 @@ def update_department(
         detail=payload.model_dump(exclude_unset=True),
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -144,7 +140,6 @@ def delete_department(
         resource_id=dept_id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.get(
@@ -186,7 +181,6 @@ def create_permission(
         detail={"code": result.code, "action": result.action},
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -226,7 +220,6 @@ def update_permission(
         detail=payload.model_dump(exclude_unset=True),
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -250,7 +243,6 @@ def delete_permission(
         resource_id=perm_id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.get(
@@ -292,7 +284,6 @@ def create_role(
         detail={"name": result.name, "code": result.code},
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -333,7 +324,6 @@ def update_role(
         detail=payload.model_dump(exclude_unset=True, exclude={"permission_ids"}),
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -357,7 +347,6 @@ def delete_role(
         resource_id=role_id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.get(
@@ -406,7 +395,6 @@ def create_user(
         detail={"username": result.username, "real_name": result.real_name},
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -447,7 +435,6 @@ def update_user(
         detail=payload.model_dump(exclude_unset=True, exclude={"role_ids"}),
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
     return result
 
 
@@ -471,7 +458,6 @@ def delete_user(
         resource_id=user_id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.post(
@@ -496,7 +482,6 @@ def reset_user_password(
         resource_id=user_id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.post(
@@ -521,7 +506,6 @@ def change_my_password(
         resource_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    _commit_write(db)
 
 
 @router.get(

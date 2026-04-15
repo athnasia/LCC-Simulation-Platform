@@ -208,7 +208,7 @@
               allow-create
               default-first-option
               class="attr-key"
-              @change="onAttrKeyChange(attr)"
+              @change="onAttrKeyChange"
             >
               <el-option
                 v-for="def in materialAttrDefs"
@@ -254,8 +254,8 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { materialApi, unitApi, attrDefinitionApi } from '@/api/masterData'
-import type { Material, ResourceCategoryTree, Unit, AttrDefinition, AttrDataType } from '@/api/masterData'
+import { attrDefinitionApi, materialApi, ResourceType, unitApi } from '@/api/masterData'
+import type { AttrDataType, AttrDefinition, Material, ResourceCategoryTree, Unit } from '@/api/masterData'
 
 interface DynamicAttr {
   key: string
@@ -318,10 +318,10 @@ const rules = computed<FormRules>(() => ({
 }))
 
 const categoryTreeData = computed(() => {
-  return filterCategoryTree(props.categoryTree, 'MATERIAL')
+  return filterCategoryTree(props.categoryTree, ResourceType.MATERIAL)
 })
 
-function filterCategoryTree(tree: ResourceCategoryTree[], resourceType: string): ResourceCategoryTree[] {
+function filterCategoryTree(tree: ResourceCategoryTree[], resourceType: ResourceType): ResourceCategoryTree[] {
   return tree
     .filter((node) => node.resource_type === resourceType)
     .map((node) => ({
@@ -349,7 +349,7 @@ async function loadMaterialAttrDefs() {
     const res = await attrDefinitionApi.list({ size: 100 })
     const allDefs = res.data.items
     materialAttrDefs.value = allDefs.filter(
-      (def) => def.applicable_resource_types?.includes('MATERIAL')
+      (def) => def.applicable_resource_types?.includes(ResourceType.MATERIAL)
     )
     attrDefMap.value = new Map(materialAttrDefs.value.map((def) => [def.code, def]))
   } catch {
@@ -447,7 +447,7 @@ function checkDuplicateKeys() {
   })
 }
 
-function onAttrKeyChange(attr: DynamicAttr) {
+function onAttrKeyChange() {
   checkDuplicateKeys()
   updateDynamicAttributes()
 }

@@ -442,7 +442,10 @@ class RoleService:
             select(func.count()).select_from(stmt.subquery())
         ).scalar_one()
         rows = self.db.execute(
-            stmt.order_by(SysRole.id).offset((page - 1) * size).limit(size)
+            stmt.options(selectinload(SysRole.permissions))
+            .order_by(SysRole.id)
+            .offset((page - 1) * size)
+            .limit(size)
         ).scalars().all()
 
         return PageResult.build(

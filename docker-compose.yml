@@ -1,0 +1,81 @@
+x-backend-service: &backend-service
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  working_dir: /workspace/backend
+  volumes:
+    - ./:/workspace
+  environment:
+    PYTHONPATH: /workspace/backend
+    DB_HOST: mysql
+    DB_PORT: 3306
+    DB_USER: lcc_user
+    DB_PASSWORD: lcc_password
+    DB_NAME: lcc
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - lcc-network
+
+services:
+  api:
+    <<: *backend-service
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "8001:8001"
+
+  worker:
+    <<: *backend-service
+    command: celery -A app.tasks:celery_app worker --loglevel=info
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "63799:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lcc-network
+
+  mysql:
+    image: mysql:8.0
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: lcc
+      MYSQL_USER: lcc_user
+      MYSQL_PASSWORD: lcc_password
+    ports:
+      - "33306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - lcc-network
+
+networks:
+  lcc-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:

@@ -15,7 +15,7 @@
           default-expand-all
           highlight-current
           :expand-on-click-node="false"
-          :current-node-key="selectedCategoryId ?? undefined"
+          :current-node-key="queryState.categoryId ?? undefined"
           :props="{ children: 'children', label: 'name' }"
           class="category-tree"
           @node-click="handleCategoryNodeClick"
@@ -34,14 +34,14 @@
       <el-card shadow="never" body-style="padding:12px 16px">
         <div class="flex items-center gap-3">
           <el-input
-            v-model="searchKeyword"
+            v-model="queryState.keyword"
             placeholder="搜索材料名称 / 编码"
             :prefix-icon="Search"
             clearable
             class="w-64"
             @change="loadMaterials"
           />
-          <el-select v-model="filterActive" placeholder="启用状态" clearable class="w-32" @change="loadMaterials">
+          <el-select v-model="queryState.isActive" placeholder="启用状态" clearable class="w-32" @change="loadMaterials">
             <el-option label="启用" :value="true" />
             <el-option label="禁用" :value="false" />
           </el-select>
@@ -176,36 +176,44 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { materialApi, resourceCategoryApi } from '@/api/masterData'
-import type { Material, ResourceCategoryTree } from '@/api/masterData'
+import { materialApi, resourceCategoryApi, ResourceType } from '@/api/masterData'
+import type { Material, MaterialQuery, ResourceCategoryTree } from '@/api/masterData'
 import MaterialFormDialog from '@/components/master-data/MaterialFormDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+
+interface MaterialQueryState {
+  keyword: string
+  isActive: boolean | null
+  categoryId: number | null
+}
 
 const authStore = useAuthStore()
 const canWrite = computed(() => authStore.hasPermissionScope('/master-data/materials:write'))
 const canDelete = computed(() => authStore.hasPermissionScope('/master-data/materials:delete'))
 
 const categoryTree = ref<ResourceCategoryTree[]>([])
-const selectedCategoryId = ref<number | null>(null)
 const materialList = ref<Material[]>([])
 const tableLoading = ref(false)
-const searchKeyword = ref('')
-const filterActive = ref<boolean | null>(null)
 const pagination = reactive({ page: 1, size: 20, total: 0 })
+const queryState = reactive<MaterialQueryState>({
+  keyword: '',
+  isActive: null,
+  categoryId: null,
+})
 
 const materialDialogVisible = ref(false)
 const currentMaterial = ref<Material | null>(null)
 
 async function loadCategories() {
-  const res = await resourceCategoryApi.tree('MATERIAL')
+  const res = await resourceCategoryApi.tree(ResourceType.MATERIAL)
   categoryTree.value = res.data
 }
 
 function handleCategoryNodeClick(node: ResourceCategoryTree) {
-  if (selectedCategoryId.value === node.id) {
-    selectedCategoryId.value = null
+  if (queryState.categoryId === node.id) {
+    queryState.categoryId = null
   } else {
-    selectedCategoryId.value = node.id
+    queryState.categoryId = node.id
   }
   pagination.page = 1
   loadMaterials()
@@ -214,13 +222,19 @@ function handleCategoryNodeClick(node: ResourceCategoryTree) {
 async function loadMaterials() {
   tableLoading.value = true
   try {
-    const params: Record<string, unknown> = {
+    const params: MaterialQuery = {
       page: pagination.page,
       size: pagination.size,
     }
-    if (searchKeyword.value) params.keyword = searchKeyword.value
-    if (filterActive.value !== null) params.is_active = filterActive.value
-    if (selectedCategoryId.value) params.category_id = selectedCategoryId.value
+    if (queryState.keyword) {
+      params.keyword = queryState.keyword
+    }
+    if (queryState.isActive !== null) {
+      params.is_active = queryState.isActive
+    }
+    if (queryState.categoryId !== null) {
+      params.category_id = queryState.categoryId
+    }
 
     const res = await materialApi.list(params)
     materialList.value = res.data.items
@@ -241,12 +255,19 @@ async function openMaterialDialog(row?: Material) {
 }
 
 async function deleteMaterial(row: Material) {
-  await ElMessageBox.confirm(`确定删除材料「${row.name}（${row.code}）」吗？`, '警告', {
-    type: 'warning',
-  })
-  await materialApi.remove(row.id)
-  ElMessage.success('已删除')
-  loadMaterials()
+  try {
+    await ElMessageBox.confirm(`确定删除材料「${row.name}（${row.code}）」吗？`, '警告', {
+      type: 'warning',
+    })
+    await materialApi.remove(row.id)
+    ElMessage.success('已删除')
+    await loadMaterials()
+  } catch (error: unknown) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error('删除失败，请稍后重试')
+  }
 }
 
 function formatDate(iso: string) {

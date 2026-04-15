@@ -20,10 +20,6 @@ from app.services.master_data_service import MaterialService
 router = APIRouter()
 
 
-def _commit_write(db: Session) -> None:
-    db.commit()
-
-
 @router.get(
     "",
     response_model=PageResult[MaterialResponse],
@@ -62,7 +58,6 @@ def create_material(
 ) -> MaterialResponse:
     operator = str(current_user.id)
     result = MaterialService(db).create(payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -93,7 +88,6 @@ def update_material(
 ) -> MaterialResponse:
     operator = str(current_user.id)
     result = MaterialService(db).update(material_id, payload, operator)
-    _commit_write(db)
     return result
 
 
@@ -110,4 +104,3 @@ def delete_material(
 ) -> None:
     operator = str(current_user.id)
     MaterialService(db).delete(material_id, operator)
-    _commit_write(db)
