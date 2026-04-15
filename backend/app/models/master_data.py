@@ -32,6 +32,7 @@ class ResourceType(str, enum.Enum):
     EQUIPMENT = "EQUIPMENT"
     LABOR = "LABOR"
     TOOL = "TOOL"
+    PROCESS = "PROCESS"
 
 
 class DataType(str, enum.Enum):
@@ -315,6 +316,9 @@ class MdProcess(AuditMixin, Base):
     setup_time: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True, comment="换产准备时间（小时）"
     )
+    dynamic_attributes: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="柔性属性（JSON 对象）"
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="1", comment="是否启用"
     )
@@ -351,6 +355,7 @@ class MdProcessResource(AuditMixin, Base):
     quantity: Mapped[Decimal] = mapped_column(
         Numeric(10, 4), default=1, comment="消耗数量/投入比例"
     )
+    resource_name: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="资源名称快照")
     description: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="备注说明")
 
     process: Mapped["MdProcess"] = relationship("MdProcess", back_populates="resources")
@@ -425,6 +430,9 @@ class MdEnergyRate(AuditMixin, Base):
 
 class MdEnergyCalendar(AuditMixin, Base):
     __tablename__ = "md_energy_calendar"
+    __table_args__ = (
+        UniqueConstraint("energy_rate_id", "name", "is_deleted", name="uq_md_energy_calendar_rate_name_deleted"),
+    )
 
     energy_rate_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("md_energy_rate.id"), nullable=False, comment="能源单价 ID"

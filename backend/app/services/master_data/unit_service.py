@@ -1,0 +1,441 @@
+from __future__ import annotations
+from decimal import Decimal
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
+from app.models.master_data import MdUnit, MdUnitConversion, MdUnitDimension
+from app.schemas.common import PageResult
+from app.schemas.master_data import (
+    UnitConversionCalculateRequest,
+    UnitConversionCalculateResponse,
+    UnitConversionCreate,
+    UnitConversionResponse,
+    UnitConversionUpdate,
+    UnitCreate,
+    UnitDimensionCreate,
+    UnitDimensionResponse,
+    UnitDimensionUpdate,
+    UnitResponse,
+    UnitUpdate,
+)
+from .base import _build_deleted_unique_value
+
+class UnitDimensionService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, dimension_id: int) -> MdUnitDimension:
+        dimension = self.db.execute(
+            select(MdUnitDimension).where(
+                MdUnitDimension.id == dimension_id,
+                MdUnitDimension.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if dimension is None:
+            raise ResourceNotFoundError(resource="量纲", identifier=dimension_id)
+        return dimension
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdUnitDimension).where(
+            MdUnitDimension.code == code,
+            MdUnitDimension.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdUnitDimension.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="DIMENSION_CODE_DUPLICATE",
+                message=f"量纲编码已存在：{code}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[UnitDimensionResponse]:
+        stmt = select(MdUnitDimension).where(MdUnitDimension.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdUnitDimension.name.ilike(f"%{keyword}%"),
+                    MdUnitDimension.code.ilike(f"%{keyword}%"),
+                )
+            )
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.order_by(MdUnitDimension.sort_order, MdUnitDimension.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[UnitDimensionResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, dimension_id: int) -> UnitDimensionResponse:
+        dimension = self._get_or_404(dimension_id)
+        return UnitDimensionResponse.model_validate(dimension)
+
+    def create(self, payload: UnitDimensionCreate, operator: str) -> UnitDimensionResponse:
+        self._assert_code_unique(payload.code)
+
+        dimension = MdUnitDimension(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(dimension)
+        self.db.flush()
+        return UnitDimensionResponse.model_validate(dimension)
+
+    def update(
+        self, dimension_id: int, payload: UnitDimensionUpdate, operator: str
+    ) -> UnitDimensionResponse:
+        dimension = self._get_or_404(dimension_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(dimension, field, value)
+        dimension.updated_by = operator
+        self.db.flush()
+        return UnitDimensionResponse.model_validate(dimension)
+
+    def delete(self, dimension_id: int, operator: str) -> None:
+        dimension = self._get_or_404(dimension_id)
+
+        dimension.code = _build_deleted_unique_value(dimension.code, dimension.id, 30)
+        dimension.is_deleted = True
+        dimension.updated_by = operator
+        self.db.flush()
+
+class UnitService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, unit_id: int) -> MdUnit:
+        unit = self.db.execute(
+            select(MdUnit).where(
+                MdUnit.id == unit_id,
+                MdUnit.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if unit is None:
+            raise ResourceNotFoundError(resource="单位", identifier=unit_id)
+        return unit
+
+    def _assert_code_unique(self, code: str, exclude_id: int | None = None) -> None:
+        stmt = select(MdUnit).where(
+            MdUnit.code == code,
+            MdUnit.is_deleted == False,
+        )
+        if exclude_id is not None:
+            stmt = stmt.where(MdUnit.id != exclude_id)
+        exists = self.db.execute(stmt).scalar_one_or_none()
+        if exists is not None:
+            raise BusinessRuleViolationError(
+                error_code="UNIT_CODE_DUPLICATE",
+                message=f"单位编码已存在：{code}",
+            )
+
+    def list(
+        self,
+        keyword: str | None = None,
+        dimension_id: int | None = None,
+        is_base: bool | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[UnitResponse]:
+        stmt = select(MdUnit).where(MdUnit.is_deleted == False)
+
+        if keyword:
+            stmt = stmt.where(
+                or_(
+                    MdUnit.name.ilike(f"%{keyword}%"),
+                    MdUnit.code.ilike(f"%{keyword}%"),
+                )
+            )
+        if dimension_id is not None:
+            stmt = stmt.where(MdUnit.dimension_id == dimension_id)
+        if is_base is not None:
+            stmt = stmt.where(MdUnit.is_base == is_base)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(selectinload(MdUnit.dimension))
+        stmt = stmt.order_by(MdUnit.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[UnitResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, unit_id: int) -> UnitResponse:
+        unit = self._get_or_404(unit_id)
+        unit = self.db.execute(
+            select(MdUnit)
+            .where(MdUnit.id == unit_id)
+            .options(selectinload(MdUnit.dimension))
+        ).scalar_one()
+        return UnitResponse.model_validate(unit)
+
+    def create(self, payload: UnitCreate, operator: str) -> UnitResponse:
+        self._assert_code_unique(payload.code)
+
+        dimension = self.db.execute(
+            select(MdUnitDimension).where(
+                MdUnitDimension.id == payload.dimension_id,
+                MdUnitDimension.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if dimension is None:
+            raise ResourceNotFoundError(resource="量纲", identifier=payload.dimension_id)
+
+        unit = MdUnit(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(unit)
+        self.db.flush()
+
+        unit = self.db.execute(
+            select(MdUnit)
+            .where(MdUnit.id == unit.id)
+            .options(selectinload(MdUnit.dimension))
+        ).scalar_one()
+        return UnitResponse.model_validate(unit)
+
+    def update(self, unit_id: int, payload: UnitUpdate, operator: str) -> UnitResponse:
+        unit = self._get_or_404(unit_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(unit, field, value)
+        unit.updated_by = operator
+        self.db.flush()
+
+        unit = self.db.execute(
+            select(MdUnit)
+            .where(MdUnit.id == unit_id)
+            .options(selectinload(MdUnit.dimension))
+        ).scalar_one()
+        return UnitResponse.model_validate(unit)
+
+    def delete(self, unit_id: int, operator: str) -> None:
+        unit = self._get_or_404(unit_id)
+
+        unit.code = _build_deleted_unique_value(unit.code, unit.id, 20)
+        unit.is_deleted = True
+        unit.updated_by = operator
+        self.db.flush()
+
+class UnitConversionService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_or_404(self, conversion_id: int) -> MdUnitConversion:
+        conversion = self.db.execute(
+            select(MdUnitConversion).where(
+                MdUnitConversion.id == conversion_id,
+                MdUnitConversion.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if conversion is None:
+            raise ResourceNotFoundError(resource="单位换算", identifier=conversion_id)
+        return conversion
+
+    def _assert_same_dimension(self, from_unit_id: int, to_unit_id: int) -> None:
+        """校验源单位和目标单位必须属于同一量纲"""
+        from_unit = self.db.execute(
+            select(MdUnit).where(MdUnit.id == from_unit_id, MdUnit.is_deleted == False)
+        ).scalar_one_or_none()
+        to_unit = self.db.execute(
+            select(MdUnit).where(MdUnit.id == to_unit_id, MdUnit.is_deleted == False)
+        ).scalar_one_or_none()
+
+        if from_unit is None:
+            raise ResourceNotFoundError(resource="源单位", identifier=from_unit_id)
+        if to_unit is None:
+            raise ResourceNotFoundError(resource="目标单位", identifier=to_unit_id)
+
+        if from_unit.dimension_id != to_unit.dimension_id:
+            raise BusinessRuleViolationError(
+                error_code="UNIT_CONVERSION_DIFFERENT_DIMENSION",
+                message=f"单位换算失败：源单位（{from_unit.name}）和目标单位（{to_unit.name}）不属于同一量纲",
+                detail={
+                    "from_unit_dimension": from_unit.dimension_id,
+                    "to_unit_dimension": to_unit.dimension_id,
+                },
+            )
+
+    def list(
+        self,
+        from_unit_id: int | None = None,
+        to_unit_id: int | None = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> PageResult[UnitConversionResponse]:
+        stmt = select(MdUnitConversion).where(MdUnitConversion.is_deleted == False)
+
+        if from_unit_id is not None:
+            stmt = stmt.where(MdUnitConversion.from_unit_id == from_unit_id)
+        if to_unit_id is not None:
+            stmt = stmt.where(MdUnitConversion.to_unit_id == to_unit_id)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        stmt = stmt.options(
+            selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+            selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+        )
+        stmt = stmt.order_by(MdUnitConversion.id)
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        items = self.db.execute(stmt).scalars().all()
+
+        return PageResult(
+            items=[UnitConversionResponse.model_validate(item) for item in items],
+            total=total,
+            page=page,
+            size=size,
+            pages=(total + size - 1) // size,
+        )
+
+    def get(self, conversion_id: int) -> UnitConversionResponse:
+        conversion = self._get_or_404(conversion_id)
+        conversion = self.db.execute(
+            select(MdUnitConversion)
+            .where(MdUnitConversion.id == conversion_id)
+            .options(
+                selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+                selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+            )
+        ).scalar_one()
+        return UnitConversionResponse.model_validate(conversion)
+
+    def create(
+        self, payload: UnitConversionCreate, operator: str
+    ) -> UnitConversionResponse:
+        self._assert_same_dimension(payload.from_unit_id, payload.to_unit_id)
+
+        conversion = MdUnitConversion(
+            **payload.model_dump(),
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(conversion)
+        self.db.flush()
+
+        conversion = self.db.execute(
+            select(MdUnitConversion)
+            .where(MdUnitConversion.id == conversion.id)
+            .options(
+                selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+                selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+            )
+        ).scalar_one()
+        return UnitConversionResponse.model_validate(conversion)
+
+    def update(
+        self, conversion_id: int, payload: UnitConversionUpdate, operator: str
+    ) -> UnitConversionResponse:
+        conversion = self._get_or_404(conversion_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(conversion, field, value)
+        conversion.updated_by = operator
+        self.db.flush()
+
+        conversion = self.db.execute(
+            select(MdUnitConversion)
+            .where(MdUnitConversion.id == conversion_id)
+            .options(
+                selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+                selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+            )
+        ).scalar_one()
+        return UnitConversionResponse.model_validate(conversion)
+
+    def delete(self, conversion_id: int, operator: str) -> None:
+        conversion = self._get_or_404(conversion_id)
+        conversion.is_deleted = True
+        conversion.updated_by = operator
+        self.db.flush()
+
+    def calculate(
+        self, payload: UnitConversionCalculateRequest
+    ) -> UnitConversionCalculateResponse:
+        """ 执行单位换算计算（目前仅支持线性换算） """
+        conversion = self.db.execute(
+            select(MdUnitConversion).where(
+                MdUnitConversion.from_unit_id == payload.from_unit_id,
+                MdUnitConversion.to_unit_id == payload.to_unit_id,
+                MdUnitConversion.is_deleted == False,
+            )
+            .options(
+                selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+                selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+            )
+        ).scalar_one_or_none()
+
+        if conversion is None:
+            reverse_conversion = self.db.execute(
+                select(MdUnitConversion).where(
+                    MdUnitConversion.from_unit_id == payload.to_unit_id,
+                    MdUnitConversion.to_unit_id == payload.from_unit_id,
+                    MdUnitConversion.is_deleted == False,
+                )
+                .options(
+                    selectinload(MdUnitConversion.from_unit).selectinload(MdUnit.dimension),
+                    selectinload(MdUnitConversion.to_unit).selectinload(MdUnit.dimension),
+                )
+            ).scalar_one_or_none()
+
+            if reverse_conversion is not None:
+                reverse_factor = Decimal("1") / reverse_conversion.conversion_factor
+                converted_value = payload.value * reverse_factor
+
+                return UnitConversionCalculateResponse(
+                    from_unit=reverse_conversion.to_unit,
+                    to_unit=reverse_conversion.from_unit,
+                    original_value=payload.value,
+                    converted_value=converted_value,
+                    conversion_factor=reverse_factor,
+                    offset=reverse_conversion.offset,
+                )
+
+            raise BusinessRuleViolationError(
+                error_code="UNIT_CONVERSION_NOT_FOUND",
+                message="未找到对应的单位换算规则（正向或反向）",
+                detail={
+                    "from_unit_id": payload.from_unit_id,
+                    "to_unit_id": payload.to_unit_id,
+                },
+            )
+
+        converted_value = payload.value * conversion.conversion_factor
+
+        return UnitConversionCalculateResponse(
+            from_unit=conversion.from_unit,
+            to_unit=conversion.to_unit,
+            original_value=payload.value,
+            converted_value=converted_value,
+            conversion_factor=conversion.conversion_factor,
+            offset=conversion.offset,
+        )

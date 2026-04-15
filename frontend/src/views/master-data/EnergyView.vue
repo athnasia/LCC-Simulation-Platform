@@ -199,7 +199,7 @@ function openCreateDialog() {
 }
 
 function openEditDialog(row: EnergyRate) {
-  currentEnergy.value = { ...row }
+  currentEnergy.value = structuredClone(row)
   dialogVisible.value = true
 }
 

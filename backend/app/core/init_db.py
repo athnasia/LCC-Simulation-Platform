@@ -247,6 +247,27 @@ _SYSTEM_PERMISSION_SEEDS = [
         "action": "delete",
         "description": "删除能源日历配置",
     },
+    {
+        "name": "工艺工时库查看",
+        "code": "MASTER_DATA_PROCESSES_READ",
+        "resource": "/master-data/processes",
+        "action": "read",
+        "description": "查看标准工艺与工时模板",
+    },
+    {
+        "name": "工艺工时库维护",
+        "code": "MASTER_DATA_PROCESSES_WRITE",
+        "resource": "/master-data/processes",
+        "action": "write",
+        "description": "新建和编辑标准工艺库",
+    },
+    {
+        "name": "工艺工时库删除",
+        "code": "MASTER_DATA_PROCESSES_DELETE",
+        "resource": "/master-data/processes",
+        "action": "delete",
+        "description": "删除工艺模板",
+    },
 ]
 
 _BUILTIN_ROLE_PERMISSIONS = {

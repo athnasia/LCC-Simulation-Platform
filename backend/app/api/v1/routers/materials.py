@@ -15,7 +15,8 @@ from app.schemas.master_data import (
     MaterialResponse,
     MaterialUpdate,
 )
-from app.services.master_data_service import MaterialService
+from app.services.master_data.material_service import MaterialService
+from app.services.system_service import AuditLogService
 
 router = APIRouter()
 
@@ -58,6 +59,15 @@ def create_material(
 ) -> MaterialResponse:
     operator = str(current_user.id)
     result = MaterialService(db).create(payload, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        resource_type="MdMaterial",
+        resource_id=result.id,
+        detail={"name": result.name, "code": result.code},
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -88,6 +98,15 @@ def update_material(
 ) -> MaterialResponse:
     operator = str(current_user.id)
     result = MaterialService(db).update(material_id, payload, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="MdMaterial",
+        resource_id=material_id,
+        detail=payload.model_dump(exclude_unset=True),
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -104,3 +123,11 @@ def delete_material(
 ) -> None:
     operator = str(current_user.id)
     MaterialService(db).delete(material_id, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        resource_type="MdMaterial",
+        resource_id=material_id,
+        ip_address=request.client.host if request.client else None,
+    )

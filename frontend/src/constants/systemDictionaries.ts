@@ -33,6 +33,13 @@ export const AUDIT_RESOURCE_TYPE_OPTIONS: DictionaryOption[] = [
   { value: 'SysUser', label: '用户', sort_order: 4, extra_json: null },
   { value: 'SysDictType', label: '字典类型', sort_order: 5, extra_json: null },
   { value: 'SysDictItem', label: '字典项', sort_order: 6, extra_json: null },
+  { value: 'MdMaterial', label: '材料主数据', sort_order: 7, extra_json: { tag_type: 'primary' } },
+  { value: 'MdEquipment', label: '设备能力库', sort_order: 8, extra_json: { tag_type: 'primary' } },
+  { value: 'MdProcess', label: '工艺工时库', sort_order: 9, extra_json: { tag_type: 'primary' } },
+  { value: 'MdProcessResource', label: '工序资源挂载', sort_order: 10, extra_json: { tag_type: 'info' } },
+  { value: 'MdLabor', label: '人员技能矩阵', sort_order: 11, extra_json: { tag_type: 'primary' } },
+  { value: 'MdEnergyRate', label: '能源单价', sort_order: 12, extra_json: { tag_type: 'primary' } },
+  { value: 'MdEnergyCalendar', label: '能源日历', sort_order: 13, extra_json: { tag_type: 'warning' } },
 ]
 
 export const LABOR_SKILL_OPTIONS: DictionaryOption[] = [

@@ -68,6 +68,7 @@ declare module 'vue' {
     LaborFormDialog: typeof import('./src/components/master-data/LaborFormDialog.vue')['default']
     MaterialFormDialog: typeof import('./src/components/master-data/MaterialFormDialog.vue')['default']
     PermissionFormDialog: typeof import('./src/components/system/PermissionFormDialog.vue')['default']
+    ProcessFormDialog: typeof import('./src/components/master-data/ProcessFormDialog.vue')['default']
     RoleFormDialog: typeof import('./src/components/system/RoleFormDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

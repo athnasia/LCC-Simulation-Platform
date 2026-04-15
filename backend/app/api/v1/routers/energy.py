@@ -2,7 +2,7 @@
 能源单价与日历 API 路由
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, get_db, require_permission
@@ -16,7 +16,8 @@ from app.schemas.master_data import (
     EnergyRateUpdate,
     EnergyType,
 )
-from app.services.master_data_service import EnergyRateService, EnergyCalendarService
+from app.services.master_data.energy_service import EnergyRateService, EnergyCalendarService
+from app.services.system_service import AuditLogService
 from app.models.system import SysUser
 
 router = APIRouter()
@@ -48,10 +49,20 @@ def list_energy_rates(
 @router.post("/rates", response_model=EnergyRateResponse, status_code=status.HTTP_201_CREATED)
 def create_energy_rate(
     payload: EnergyRateCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyRateService(db).create(payload, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        resource_type="MdEnergyRate",
+        resource_id=result.id,
+        detail={"name": result.name, "code": result.code, "energy_type": result.energy_type},
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -68,20 +79,39 @@ def get_energy_rate(
 def update_energy_rate(
     rate_id: int,
     payload: EnergyRateUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyRateService(db).update(rate_id, payload, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="MdEnergyRate",
+        resource_id=rate_id,
+        detail=payload.model_dump(exclude_unset=True),
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
 @router.delete("/rates/{rate_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_energy_rate(
     rate_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
 ):
     EnergyRateService(db).delete(rate_id, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        resource_type="MdEnergyRate",
+        resource_id=rate_id,
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -108,10 +138,20 @@ def list_energy_calendars(
 @router.post("/calendars", response_model=EnergyCalendarResponse, status_code=status.HTTP_201_CREATED)
 def create_energy_calendar(
     payload: EnergyCalendarCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyCalendarService(db).create(payload, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        resource_type="MdEnergyCalendar",
+        resource_id=result.id,
+        detail={"name": result.name, "energy_rate_id": result.energy_rate_id},
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -128,17 +168,36 @@ def get_energy_calendar(
 def update_energy_calendar(
     calendar_id: int,
     payload: EnergyCalendarUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "write")),
 ):
     result = EnergyCalendarService(db).update(calendar_id, payload, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="MdEnergyCalendar",
+        resource_id=calendar_id,
+        detail=payload.model_dump(exclude_unset=True),
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
 @router.delete("/calendars/{calendar_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_energy_calendar(
     calendar_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(require_permission("/master-data/energy", "delete")),
 ):
     EnergyCalendarService(db).delete(calendar_id, current_user.username)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        resource_type="MdEnergyCalendar",
+        resource_id=calendar_id,
+        ip_address=request.client.host if request.client else None,
+    )

@@ -16,12 +16,13 @@
   - 能源日历（EnergyCalendar）的请求/响应模型
 """
 
-import enum
 from datetime import datetime, time
 from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, model_validator
+
+from app.models.master_data import ResourceType, DataType, SkillLevel, EnergyType
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -186,13 +187,6 @@ class UnitConversionCalculateResponse(BaseModel):
 # 五、资源分类（ResourceCategory）
 # ═════════════════════════════════════════════════════════════════════════════
 
-class ResourceType(str, enum.Enum):
-    MATERIAL = "MATERIAL"
-    EQUIPMENT = "EQUIPMENT"
-    LABOR = "LABOR"
-    TOOL = "TOOL"
-
-
 class ResourceCategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="分类名称")
     code: str = Field(..., min_length=1, max_length=50, pattern=r"^[A-Z][A-Z0-9_]*$", description="分类编码（纯大写英文）")
@@ -258,15 +252,6 @@ class ResourceCategoryTreeResponse(ResourceCategoryBase):
 # ═════════════════════════════════════════════════════════════════════════════
 # 六、属性定义（AttrDefinition）
 # ═════════════════════════════════════════════════════════════════════════════
-
-class DataType(str, enum.Enum):
-    STRING = "STRING"
-    NUMBER = "NUMBER"
-    BOOLEAN = "BOOLEAN"
-    JSON = "JSON"
-    DATE = "DATE"
-    ENUM = "ENUM"
-
 
 class AttrDefinitionBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="属性名称")
@@ -434,6 +419,7 @@ class ProcessBase(BaseModel):
     category_id: int | None = Field(None, description="工序分类 ID")
     standard_time: Decimal | None = Field(None, ge=0, description="标准工时（小时）")
     setup_time: Decimal | None = Field(None, ge=0, description="换产准备时间（小时）")
+    dynamic_attributes: dict[str, Any] | None = Field(None, description="柔性属性")
     is_active: bool = Field(True, description="是否启用")
     description: str | None = Field(None, max_length=512, description="工序描述")
 
@@ -447,6 +433,7 @@ class ProcessUpdate(BaseModel):
     category_id: int | None = None
     standard_time: Decimal | None = Field(None, ge=0)
     setup_time: Decimal | None = Field(None, ge=0)
+    dynamic_attributes: dict[str, Any] | None = None
     is_active: bool | None = None
     description: str | None = Field(None, max_length=512)
 
@@ -488,7 +475,12 @@ class ProcessResourceBase(BaseModel):
 
 
 class ProcessResourceCreate(ProcessResourceBase):
-    pass
+    @model_validator(mode="after")
+    def validate_resource_type(self):
+        """校验资源类型，禁止挂载工序自身"""
+        if self.resource_type == ResourceType.PROCESS:
+            raise ValueError("工序自身不能作为挂载资源")
+        return self
 
 
 class ProcessResourceUpdate(BaseModel):
@@ -501,6 +493,7 @@ class ProcessResourceUpdate(BaseModel):
 class ProcessResourceResponse(ProcessResourceBase):
     id: int
     process_id: int
+    resource_name: str | None = None
     created_at: datetime
     updated_at: datetime
     created_by: str | None
@@ -513,13 +506,6 @@ class ProcessResourceResponse(ProcessResourceBase):
 # ═══════════════════════════════════════════════════════════════════════════════
 # 十一、人员技能资质矩阵（Labor）
 # ═══════════════════════════════════════════════════════════════════════════════
-
-class SkillLevel(str, enum.Enum):
-    JUNIOR = "JUNIOR"
-    INTERMEDIATE = "INTERMEDIATE"
-    SENIOR = "SENIOR"
-    MASTER = "MASTER"
-
 
 class LaborBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="人员名称")
@@ -576,14 +562,6 @@ class LaborBrief(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 # 十二、能源单价（EnergyRate）
 # ═══════════════════════════════════════════════════════════════════════════════
-
-class EnergyType(str, enum.Enum):
-    ELECTRICITY = "ELECTRICITY"
-    WATER = "WATER"
-    GAS = "GAS"
-    STEAM = "STEAM"
-    COMPRESSED_AIR = "COMPRESSED_AIR"
-
 
 class EnergyRateBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="能源名称")

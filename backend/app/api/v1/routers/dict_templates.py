@@ -41,9 +41,9 @@ from app.schemas.master_data import (
     UnitResponse,
     UnitUpdate,
 )
-from app.services.master_data_service import (
-    AttrDefinitionService,
-    ResourceCategoryService,
+from app.services.master_data.material_service import AttrDefinitionService
+from app.services.master_data.category_service import ResourceCategoryService
+from app.services.master_data.unit_service import (
     UnitConversionService,
     UnitDimensionService,
     UnitService,

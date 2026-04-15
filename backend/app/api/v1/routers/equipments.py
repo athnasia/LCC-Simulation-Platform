@@ -15,7 +15,8 @@ from app.schemas.master_data import (
     EquipmentResponse,
     EquipmentUpdate,
 )
-from app.services.master_data_service import EquipmentService
+from app.services.master_data.equipment_service import EquipmentService
+from app.services.system_service import AuditLogService
 
 router = APIRouter()
 
@@ -58,6 +59,15 @@ def create_equipment(
 ) -> EquipmentResponse:
     operator = str(current_user.id)
     result = EquipmentService(db).create(payload, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        resource_type="MdEquipment",
+        resource_id=result.id,
+        detail={"name": result.name, "code": result.code},
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -88,6 +98,15 @@ def update_equipment(
 ) -> EquipmentResponse:
     operator = str(current_user.id)
     result = EquipmentService(db).update(equipment_id, payload, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="MdEquipment",
+        resource_id=equipment_id,
+        detail=payload.model_dump(exclude_unset=True),
+        ip_address=request.client.host if request.client else None,
+    )
     return result
 
 
@@ -104,3 +123,11 @@ def delete_equipment(
 ) -> None:
     operator = str(current_user.id)
     EquipmentService(db).delete(equipment_id, operator)
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        resource_type="MdEquipment",
+        resource_id=equipment_id,
+        ip_address=request.client.host if request.client else None,
+    )

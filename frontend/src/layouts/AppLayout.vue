@@ -47,22 +47,22 @@
               <el-icon><Grid /></el-icon>
               <span>主数据中心</span>
             </template>
-            <el-menu-item index="/master-data/dictionaries">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/dictionaries:read')" index="/master-data/dictionaries">
               <el-icon><Collection /></el-icon>基础字典与模板
             </el-menu-item>
-            <el-menu-item index="/master-data/materials">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/materials:read')" index="/master-data/materials">
               <el-icon><Box /></el-icon>材料台账
             </el-menu-item>
-            <el-menu-item index="/master-data/equipments">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/equipments:read')" index="/master-data/equipments">
               <el-icon><Setting /></el-icon>设备能力库
             </el-menu-item>
-            <el-menu-item index="/master-data/processes">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/processes:read')" index="/master-data/processes">
               <el-icon><Operation /></el-icon>工艺工时库
             </el-menu-item>
-            <el-menu-item v-if="!authStore.hasPermissionScope('/master-data/labor:read') === false" index="/master-data/labor">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/labor:read')" index="/master-data/labor">
               <el-icon><User /></el-icon>人员技能矩阵
             </el-menu-item>
-            <el-menu-item v-if="!authStore.hasPermissionScope('/master-data/energy:read') === false" index="/master-data/energy">
+            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/energy:read')" index="/master-data/energy">
               <el-icon><Lightning /></el-icon>能源日历
             </el-menu-item>
           </el-sub-menu>
