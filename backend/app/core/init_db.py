@@ -205,6 +205,48 @@ _SYSTEM_PERMISSION_SEEDS = [
         "action": "delete",
         "description": "删除系统级数据字典",
     },
+    {
+        "name": "人员工时查看",
+        "code": "MASTER_DATA_LABOR_READ",
+        "resource": "/master-data/labor",
+        "action": "read",
+        "description": "查看人员工时台账",
+    },
+    {
+        "name": "人员工时维护",
+        "code": "MASTER_DATA_LABOR_WRITE",
+        "resource": "/master-data/labor",
+        "action": "write",
+        "description": "新建和编辑人员工时与属性",
+    },
+    {
+        "name": "人员工时删除",
+        "code": "MASTER_DATA_LABOR_DELETE",
+        "resource": "/master-data/labor",
+        "action": "delete",
+        "description": "删除人员工时台账记录",
+    },
+    {
+        "name": "能源日历查看",
+        "code": "MASTER_DATA_ENERGY_READ",
+        "resource": "/master-data/energy",
+        "action": "read",
+        "description": "查看能源日历与费率",
+    },
+    {
+        "name": "能源日历维护",
+        "code": "MASTER_DATA_ENERGY_WRITE",
+        "resource": "/master-data/energy",
+        "action": "write",
+        "description": "新建和编辑能源单价及时段",
+    },
+    {
+        "name": "能源日历删除",
+        "code": "MASTER_DATA_ENERGY_DELETE",
+        "resource": "/master-data/energy",
+        "action": "delete",
+        "description": "删除能源日历配置",
+    },
 ]
 
 _BUILTIN_ROLE_PERMISSIONS = {
@@ -257,6 +299,12 @@ _PERMISSION_NAME_BY_CODE = {
     "SYSTEM_DICTIONARIES_READ": "数据字典查看",
     "SYSTEM_DICTIONARIES_WRITE": "数据字典维护",
     "SYSTEM_DICTIONARIES_DELETE": "数据字典删除",
+    "MASTER_DATA_LABOR_READ": "人员工时查看",
+    "MASTER_DATA_LABOR_WRITE": "人员工时维护",
+    "MASTER_DATA_LABOR_DELETE": "人员工时删除",
+    "MASTER_DATA_ENERGY_READ": "能源日历查看",
+    "MASTER_DATA_ENERGY_WRITE": "能源日历维护",
+    "MASTER_DATA_ENERGY_DELETE": "能源日历删除",
 }
 
 _PERMISSION_DESCRIPTION_BY_CODE = {
@@ -267,6 +315,12 @@ _PERMISSION_DESCRIPTION_BY_CODE = {
     "SYSTEM_DICTIONARIES_READ": "允许查看系统级数据字典",
     "SYSTEM_DICTIONARIES_WRITE": "允许维护系统级数据字典",
     "SYSTEM_DICTIONARIES_DELETE": "允许删除系统级数据字典",
+    "MASTER_DATA_LABOR_READ": "允许查询人员工时与技能列表",
+    "MASTER_DATA_LABOR_WRITE": "允许新增、编辑人员工时信息",
+    "MASTER_DATA_LABOR_DELETE": "允许删除人员工时信息",
+    "MASTER_DATA_ENERGY_READ": "允许查询能源日历与单位费率",
+    "MASTER_DATA_ENERGY_WRITE": "允许新增、编辑能源日历时间段与费率",
+    "MASTER_DATA_ENERGY_DELETE": "允许删除能源配置项",
 }
 
 _SYSTEM_DICT_TYPE_SEEDS = [

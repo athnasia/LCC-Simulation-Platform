@@ -1785,7 +1785,7 @@ class EnergyRateService:
         for calendar_data in calendars_data:
             calendar = MdEnergyCalendar(
                 energy_rate_id=rate.id,
-                **calendar_data.model_dump(exclude={"energy_rate_id"}),
+                **calendar_data.model_dump(exclude={"energy_rate_id", "is_cross_day"}),
                 created_by=operator,
                 updated_by=operator,
             )
@@ -1899,7 +1899,7 @@ class EnergyCalendarService:
             raise ResourceNotFoundError(resource="能源单价", identifier=payload.energy_rate_id)
 
         calendar = MdEnergyCalendar(
-            **payload.model_dump(),
+            **payload.model_dump(exclude={"is_cross_day"}),
             created_by=operator,
             updated_by=operator,
         )

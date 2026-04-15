@@ -34,3 +34,18 @@ export const AUDIT_RESOURCE_TYPE_OPTIONS: DictionaryOption[] = [
   { value: 'SysDictType', label: '字典类型', sort_order: 5, extra_json: null },
   { value: 'SysDictItem', label: '字典项', sort_order: 6, extra_json: null },
 ]
+
+export const LABOR_SKILL_OPTIONS: DictionaryOption[] = [
+  { value: 'JUNIOR', label: '初级', sort_order: 1, extra_json: null },
+  { value: 'INTERMEDIATE', label: '中级', sort_order: 2, extra_json: null },
+  { value: 'SENIOR', label: '高级', sort_order: 3, extra_json: null },
+  { value: 'MASTER', label: '专家', sort_order: 4, extra_json: null },
+]
+
+export const ENERGY_TYPE_OPTIONS: DictionaryOption[] = [
+  { value: 'ELECTRICITY', label: '电', sort_order: 1, extra_json: null },
+  { value: 'WATER', label: '水', sort_order: 2, extra_json: null },
+  { value: 'GAS', label: '气', sort_order: 3, extra_json: null },
+  { value: 'STEAM', label: '蒸汽', sort_order: 4, extra_json: null },
+  { value: 'COMPRESSED_AIR', label: '压缩空气', sort_order: 5, extra_json: null },
+]
