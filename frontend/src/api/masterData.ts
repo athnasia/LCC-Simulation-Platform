@@ -87,6 +87,50 @@ export const resourceCategoryApi = {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 字典模板 - 量纲 UnitDimension
+// ═══════════════════════════════════════════════════════════════
+
+export interface UnitDimension {
+  id: number
+  name: string
+  code: string
+  description: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+  created_by: string | null
+  updated_by: string | null
+}
+
+export interface UnitDimensionQuery extends PageQuery {}
+
+export interface UnitDimensionCreate {
+  name: string
+  code: string
+  description?: string | null
+  sort_order?: number
+}
+
+export type UnitDimensionUpdate = Partial<Omit<UnitDimensionCreate, 'code'>>
+
+export const unitDimensionApi = {
+  list: (params: UnitDimensionQuery): Promise<AxiosResponse<PageResult<UnitDimension>>> =>
+    request.get('/master-data/dict-templates/dimensions', { params }),
+
+  create: (data: UnitDimensionCreate): Promise<AxiosResponse<UnitDimension>> =>
+    request.post('/master-data/dict-templates/dimensions', data),
+
+  detail: (id: number): Promise<AxiosResponse<UnitDimension>> =>
+    request.get(`/master-data/dict-templates/dimensions/${id}`),
+
+  update: (id: number, data: UnitDimensionUpdate): Promise<AxiosResponse<UnitDimension>> =>
+    request.put(`/master-data/dict-templates/dimensions/${id}`, data),
+
+  remove: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/master-data/dict-templates/dimensions/${id}`),
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 属性定义 AttrDefinition
 // ═══════════════════════════════════════════════════════════════
 
@@ -98,6 +142,7 @@ export interface AttrDefinition {
   code: string
   data_type: AttrDataType
   unit_id: number | null
+  unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol'> | null
   applicable_resource_types: ResourceType[]
   description: string | null
   is_required: boolean
@@ -109,7 +154,7 @@ export interface AttrDefinition {
 
 export interface AttrDefinitionQuery extends PageQuery {
   data_type?: AttrDataType
-  is_active?: boolean
+  resource_type?: ResourceType
 }
 
 export interface AttrDefinitionCreate {
@@ -153,24 +198,120 @@ export interface Unit {
   code: string
   symbol: string
   dimension_id: number
+  dimension: Pick<UnitDimension, 'id' | 'name' | 'code'>
   is_base: boolean
-  is_active: boolean
   description: string | null
   created_at: string
   updated_at: string
+  created_by: string | null
+  updated_by: string | null
 }
 
 export interface UnitQuery extends PageQuery {
   dimension_id?: number
+  is_base?: boolean
   is_active?: boolean
 }
 
+export interface UnitCreate {
+  name: string
+  code: string
+  symbol?: string | null
+  dimension_id: number
+  is_base?: boolean
+  description?: string | null
+}
+
+export type UnitUpdate = Partial<Omit<UnitCreate, 'code' | 'dimension_id'>>
+
 export const unitApi = {
   list: (params: UnitQuery): Promise<AxiosResponse<PageResult<Unit>>> =>
-    request.get('/master-data/units', { params }),
+    request.get('/master-data/dict-templates/units', { params }),
+
+  create: (data: UnitCreate): Promise<AxiosResponse<Unit>> =>
+    request.post('/master-data/dict-templates/units', data),
 
   detail: (id: number): Promise<AxiosResponse<Unit>> =>
-    request.get(`/master-data/units/${id}`),
+    request.get(`/master-data/dict-templates/units/${id}`),
+
+  update: (id: number, data: UnitUpdate): Promise<AxiosResponse<Unit>> =>
+    request.put(`/master-data/dict-templates/units/${id}`, data),
+
+  remove: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/master-data/dict-templates/units/${id}`),
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 字典模板 - 单位换算 UnitConversion
+// ═══════════════════════════════════════════════════════════════
+
+export interface UnitConversion {
+  id: number
+  from_unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol' | 'dimension_id'>
+  to_unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol' | 'dimension_id'>
+  conversion_factor: number
+  offset: number | null
+  description: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+  updated_by: string | null
+}
+
+export interface UnitConversionQuery extends PageQuery {
+  from_unit_id?: number
+  to_unit_id?: number
+}
+
+export interface UnitConversionCreate {
+  from_unit_id: number
+  to_unit_id: number
+  conversion_factor: number
+  offset?: number | null
+  description?: string | null
+}
+
+export interface UnitConversionUpdate {
+  conversion_factor?: number
+  offset?: number | null
+  description?: string | null
+}
+
+export interface UnitConversionCalculateRequest {
+  from_unit_id: number
+  to_unit_id: number
+  value: number
+}
+
+export interface UnitConversionCalculateResponse {
+  from_unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol' | 'dimension_id'>
+  to_unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol' | 'dimension_id'>
+  original_value: number
+  converted_value: number
+  conversion_factor: number
+  offset: number | null
+}
+
+export const unitConversionApi = {
+  list: (params: UnitConversionQuery): Promise<AxiosResponse<PageResult<UnitConversion>>> =>
+    request.get('/master-data/dict-templates/conversions', { params }),
+
+  create: (data: UnitConversionCreate): Promise<AxiosResponse<UnitConversion>> =>
+    request.post('/master-data/dict-templates/conversions', data),
+
+  detail: (id: number): Promise<AxiosResponse<UnitConversion>> =>
+    request.get(`/master-data/dict-templates/conversions/${id}`),
+
+  update: (id: number, data: UnitConversionUpdate): Promise<AxiosResponse<UnitConversion>> =>
+    request.put(`/master-data/dict-templates/conversions/${id}`, data),
+
+  remove: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/master-data/dict-templates/conversions/${id}`),
+
+  calculate: (
+    data: UnitConversionCalculateRequest,
+  ): Promise<AxiosResponse<UnitConversionCalculateResponse>> =>
+    request.post('/master-data/dict-templates/conversions/calculate', data),
 }
 
 // ═══════════════════════════════════════════════════════════════

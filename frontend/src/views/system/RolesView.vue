@@ -66,7 +66,7 @@
         <el-empty v-if="drawerPermissions.length === 0" description="该角色暂未绑定任何权限" />
         <div v-else class="flex flex-col gap-2">
           <el-card
-            v-for="perm in drawerPermissions"
+            v-for="perm in sortedDrawerPermissions"
             :key="perm.id"
             shadow="never"
             body-style="padding:12px"
@@ -74,7 +74,7 @@
           >
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-gray-800">{{ perm.name }}</span>
-              <el-tag size="small" :type="actionTagType(perm.action)">{{ perm.action }}</el-tag>
+              <el-tag size="small" :type="actionTagType(perm.action)">{{ getActionLabel(perm.action) }}</el-tag>
             </div>
             <div class="text-xs text-gray-400 mt-1">{{ perm.code }}</div>
           </el-card>
@@ -98,12 +98,17 @@ import { Plus, Search, Loading } from '@element-plus/icons-vue'
 import { roleApi, permApi } from '@/api/system'
 import type { RoleBase, RoleDetail, Permission, PermissionAction } from '@/api/system'
 import RoleFormDialog from '@/components/system/RoleFormDialog.vue'
+import { PERMISSION_ACTION_OPTIONS } from '@/constants/systemDictionaries'
 import { useAuthStore } from '@/stores/auth'
+import { useDictionaryStore } from '@/stores/dictionaries'
+import { resolveDictionaryLabel, resolveDictionarySortOrder, resolveDictionaryTagType } from '@/utils/dictionaryDisplay'
 
 const authStore = useAuthStore()
+const dictionaryStore = useDictionaryStore()
 const canWriteRoles = computed(() => authStore.hasPermissionScope('/system/roles:write'))
 const canDeleteRoles = computed(() => authStore.hasPermissionScope('/system/roles:delete'))
 const canReadPermissions = computed(() => authStore.hasPermissionScope('/system/permissions:read'))
+const permissionActionOptions = computed(() => dictionaryStore.getOptions('PERMISSION_ACTION', PERMISSION_ACTION_OPTIONS))
 
 const roleList = ref<RoleBase[]>([])
 const loading = ref(false)
@@ -119,6 +124,16 @@ const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const drawerRole = ref<RoleBase | null>(null)
 const drawerPermissions = ref<RoleDetail['permissions']>([])
+const sortedDrawerPermissions = computed(() => {
+  return [...drawerPermissions.value].sort((left, right) => {
+    const actionDiff = resolveDictionarySortOrder(permissionActionOptions.value, left.action, 999)
+      - resolveDictionarySortOrder(permissionActionOptions.value, right.action, 999)
+    if (actionDiff !== 0) {
+      return actionDiff
+    }
+    return left.name.localeCompare(right.name, 'zh-CN')
+  })
+})
 
 async function loadRoles() {
   loading.value = true
@@ -175,10 +190,11 @@ async function loadAllPermissions() {
 }
 
 const actionTagType = (action: PermissionAction) => {
-  const map: Record<PermissionAction, '' | 'success' | 'warning' | 'danger'> = {
-    read: 'success', write: '', delete: 'danger', admin: 'warning',
-  }
-  return map[action]
+  return resolveDictionaryTagType(permissionActionOptions.value, action, '')
+}
+
+const getActionLabel = (action: PermissionAction) => {
+  return resolveDictionaryLabel(permissionActionOptions.value, action, action)
 }
 
 onMounted(() => {

@@ -30,6 +30,7 @@ from app.core.exceptions import (
 from app.api.v1.routers import (
     auth,
     system,
+    system_dictionary,
     dict_templates,
     materials,
     equipments,
@@ -131,6 +132,7 @@ _API_PREFIX = "/api/v1"
 
 app.include_router(auth.router,           prefix=f"{_API_PREFIX}/auth",                    tags=["认证"])
 app.include_router(system.router,         prefix=f"{_API_PREFIX}/system",                  tags=["系统管理"])
+app.include_router(system_dictionary.router, prefix=f"{_API_PREFIX}/system/dictionaries", tags=["系统管理 - 数据字典"])
 app.include_router(dict_templates.router, prefix=f"{_API_PREFIX}/master-data/dict-templates", tags=["主数据 - 字典与模板"])
 app.include_router(materials.router,      prefix=f"{_API_PREFIX}/master-data/materials",   tags=["主数据 - 材料"])
 app.include_router(equipments.router,     prefix=f"{_API_PREFIX}/master-data/equipments",  tags=["主数据 - 设备"])

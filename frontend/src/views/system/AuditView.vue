@@ -4,17 +4,20 @@
     <el-card shadow="never" body-style="padding:12px 16px">
       <div class="flex flex-wrap items-center gap-3">
         <el-select v-model="filter.action" placeholder="操作类型" clearable class="w-44">
-          <el-option label="CREATE — 创建" value="CREATE" />
-          <el-option label="UPDATE — 更新" value="UPDATE" />
-          <el-option label="DELETE — 删除" value="DELETE" />
-          <el-option label="RESET_PASSWORD — 重置密码" value="RESET_PASSWORD" />
-          <el-option label="CHANGE_PASSWORD — 修改密码" value="CHANGE_PASSWORD" />
+          <el-option
+            v-for="option in auditActionOptions"
+            :key="option.value"
+            :label="`${option.value} — ${option.label}`"
+            :value="option.value"
+          />
         </el-select>
         <el-select v-model="filter.resource_type" placeholder="资源类型" clearable class="w-44">
-          <el-option label="OrgDepartment — 部门" value="OrgDepartment" />
-          <el-option label="SysPermission — 权限" value="SysPermission" />
-          <el-option label="SysRole — 角色" value="SysRole" />
-          <el-option label="SysUser — 用户" value="SysUser" />
+          <el-option
+            v-for="option in auditResourceTypeOptions"
+            :key="option.value"
+            :label="`${option.value} — ${option.label}`"
+            :value="option.value"
+          />
         </el-select>
         <el-date-picker
           v-model="dateRange"
@@ -37,12 +40,12 @@
         <el-table-column prop="username" label="操作人" width="120" />
         <el-table-column label="操作类型" width="170">
           <template #default="{ row }">
-            <el-tag :type="actionTagType(row.action)" size="small">{{ row.action }}</el-tag>
+            <el-tag :type="actionTagType(row.action)" size="small">{{ getActionLabel(row.action) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="资源类型" width="160">
           <template #default="{ row }">
-            <span class="text-sm text-gray-600">{{ row.resource_type }}</span>
+            <span class="text-sm text-gray-600">{{ getResourceTypeLabel(row.resource_type) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="resource_id" label="资源 ID" width="100" />
@@ -84,15 +87,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import { auditApi } from '@/api/system'
 import type { AuditLog, AuditAction } from '@/api/system'
+import { AUDIT_ACTION_OPTIONS, AUDIT_RESOURCE_TYPE_OPTIONS } from '@/constants/systemDictionaries'
+import { useDictionaryStore } from '@/stores/dictionaries'
+import { resolveDictionaryLabel, resolveDictionaryTagType } from '@/utils/dictionaryDisplay'
 
 const logList = ref<AuditLog[]>([])
 const loading = ref(false)
 const dateRange = ref<[string, string] | null>(null)
 const pagination = reactive({ page: 1, size: 20, total: 0 })
+const dictionaryStore = useDictionaryStore()
+const auditActionOptions = computed(() => dictionaryStore.getOptions('AUDIT_ACTION', AUDIT_ACTION_OPTIONS))
+const auditResourceTypeOptions = computed(() => dictionaryStore.getOptions('AUDIT_RESOURCE_TYPE', AUDIT_RESOURCE_TYPE_OPTIONS))
 
 const filter = reactive({
   action: '' as AuditAction | '',
@@ -139,14 +148,15 @@ function formatDate(iso: string) {
 }
 
 const actionTagType = (action: AuditAction) => {
-  const map: Record<AuditAction, '' | 'success' | 'warning' | 'danger'> = {
-    CREATE: 'success',
-    UPDATE: '',
-    DELETE: 'danger',
-    RESET_PASSWORD: 'warning',
-    CHANGE_PASSWORD: 'warning',
-  }
-  return map[action] ?? ''
+  return resolveDictionaryTagType(auditActionOptions.value, action, '')
+}
+
+const getActionLabel = (action: AuditAction) => {
+  return resolveDictionaryLabel(auditActionOptions.value, action, action)
+}
+
+const getResourceTypeLabel = (resourceType: string) => {
+  return resolveDictionaryLabel(auditResourceTypeOptions.value, resourceType, resourceType)
 }
 
 onMounted(loadLogs)

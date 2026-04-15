@@ -46,6 +46,7 @@ from app.models.system import (
     SysUser,
     SysUserRole,
 )
+from app.models.system_dictionary import SysDictItem, SysDictType
 
 
 # ── 种子数据常量 ───────────────────────────────────────────────────────────────
@@ -183,6 +184,27 @@ _SYSTEM_PERMISSION_SEEDS = [
         "action": "read",
         "description": "查看系统审计日志",
     },
+    {
+        "name": "数据字典查看",
+        "code": "SYSTEM_DICTIONARIES_READ",
+        "resource": "/system/dictionaries",
+        "action": "read",
+        "description": "查看系统级数据字典与缓存聚合结果",
+    },
+    {
+        "name": "数据字典维护",
+        "code": "SYSTEM_DICTIONARIES_WRITE",
+        "resource": "/system/dictionaries",
+        "action": "write",
+        "description": "新建和编辑系统级数据字典",
+    },
+    {
+        "name": "数据字典删除",
+        "code": "SYSTEM_DICTIONARIES_DELETE",
+        "resource": "/system/dictionaries",
+        "action": "delete",
+        "description": "删除系统级数据字典",
+    },
 ]
 
 _BUILTIN_ROLE_PERMISSIONS = {
@@ -232,6 +254,9 @@ _PERMISSION_NAME_BY_CODE = {
     "SYSTEM_USERS_DELETE": "用户删除",
     "SYSTEM_USERS_ADMIN": "用户管理",
     "SYSTEM_AUDIT_LOGS_READ": "审计日志查看",
+    "SYSTEM_DICTIONARIES_READ": "数据字典查看",
+    "SYSTEM_DICTIONARIES_WRITE": "数据字典维护",
+    "SYSTEM_DICTIONARIES_DELETE": "数据字典删除",
 }
 
 _PERMISSION_DESCRIPTION_BY_CODE = {
@@ -239,6 +264,67 @@ _PERMISSION_DESCRIPTION_BY_CODE = {
     "EQUIP_WRITE": "允许新增、编辑设备主数据",
     "TEST_PERM": "系统管理联调用测试权限",
     "TEST_PERM_001": "系统管理联调用测试权限001",
+    "SYSTEM_DICTIONARIES_READ": "允许查看系统级数据字典",
+    "SYSTEM_DICTIONARIES_WRITE": "允许维护系统级数据字典",
+    "SYSTEM_DICTIONARIES_DELETE": "允许删除系统级数据字典",
+}
+
+_SYSTEM_DICT_TYPE_SEEDS = [
+    {"name": "属性数据类型", "code": "ATTR_DATA_TYPE", "description": "属性模板数据类型显示字典", "sort_order": 1, "is_active": True},
+    {"name": "适用资源类型", "code": "RESOURCE_TYPE", "description": "主数据资源类型显示字典", "sort_order": 2, "is_active": True},
+    {"name": "单位类型", "code": "UNIT_KIND", "description": "基准单位与转换单位显示字典", "sort_order": 3, "is_active": True},
+    {"name": "权限动作", "code": "PERMISSION_ACTION", "description": "系统权限动作显示字典", "sort_order": 4, "is_active": True},
+    {"name": "审计动作", "code": "AUDIT_ACTION", "description": "审计日志动作显示字典", "sort_order": 5, "is_active": True},
+    {"name": "审计资源类型", "code": "AUDIT_RESOURCE_TYPE", "description": "审计日志资源类型显示字典", "sort_order": 6, "is_active": True},
+    {"name": "工序资源类型", "code": "PROCESS_RESOURCE_TYPE", "description": "工序资源挂载类型显示字典", "sort_order": 7, "is_active": True},
+]
+
+_SYSTEM_DICT_ITEM_SEEDS = {
+    "ATTR_DATA_TYPE": [
+        {"value": "STRING", "label": "字符串", "sort_order": 1, "extra_json": {"input_hint": "文本"}},
+        {"value": "NUMBER", "label": "数值", "sort_order": 2, "extra_json": {"input_hint": "数字"}},
+        {"value": "BOOLEAN", "label": "布尔值", "sort_order": 3, "extra_json": {"input_hint": "true / false"}},
+        {"value": "JSON", "label": "JSON 对象", "sort_order": 4, "extra_json": {"input_hint": "JSON 格式"}},
+        {"value": "DATE", "label": "日期", "sort_order": 5, "extra_json": {"input_hint": "日期 (YYYY-MM-DD)"}},
+        {"value": "ENUM", "label": "枚举", "sort_order": 6, "extra_json": {"input_hint": "枚举值"}},
+    ],
+    "RESOURCE_TYPE": [
+        {"value": "MATERIAL", "label": "材料", "sort_order": 1},
+        {"value": "EQUIPMENT", "label": "设备", "sort_order": 2},
+        {"value": "LABOR", "label": "人员", "sort_order": 3},
+        {"value": "TOOL", "label": "工具", "sort_order": 4},
+    ],
+    "UNIT_KIND": [
+        {"value": "BASE", "label": "基准单位", "sort_order": 1},
+        {"value": "CONVERTED", "label": "转换单位", "sort_order": 2},
+    ],
+    "PERMISSION_ACTION": [
+        {"value": "read", "label": "读取", "sort_order": 1, "extra_json": {"tag_type": "success"}},
+        {"value": "write", "label": "维护", "sort_order": 2, "extra_json": {"tag_type": ""}},
+        {"value": "delete", "label": "删除", "sort_order": 3, "extra_json": {"tag_type": "danger"}},
+        {"value": "admin", "label": "管理", "sort_order": 4, "extra_json": {"tag_type": "warning"}},
+    ],
+    "AUDIT_ACTION": [
+        {"value": "CREATE", "label": "创建", "sort_order": 1, "extra_json": {"tag_type": "success"}},
+        {"value": "UPDATE", "label": "更新", "sort_order": 2, "extra_json": {"tag_type": ""}},
+        {"value": "DELETE", "label": "删除", "sort_order": 3, "extra_json": {"tag_type": "danger"}},
+        {"value": "RESET_PASSWORD", "label": "重置密码", "sort_order": 4, "extra_json": {"tag_type": "warning"}},
+        {"value": "CHANGE_PASSWORD", "label": "修改密码", "sort_order": 5, "extra_json": {"tag_type": "warning"}},
+    ],
+    "AUDIT_RESOURCE_TYPE": [
+        {"value": "OrgDepartment", "label": "部门", "sort_order": 1},
+        {"value": "SysPermission", "label": "权限", "sort_order": 2},
+        {"value": "SysRole", "label": "角色", "sort_order": 3},
+        {"value": "SysUser", "label": "用户", "sort_order": 4},
+        {"value": "SysDictType", "label": "字典类型", "sort_order": 5},
+        {"value": "SysDictItem", "label": "字典项", "sort_order": 6},
+    ],
+    "PROCESS_RESOURCE_TYPE": [
+        {"value": "MATERIAL", "label": "材料", "sort_order": 1},
+        {"value": "EQUIPMENT", "label": "设备", "sort_order": 2},
+        {"value": "LABOR", "label": "人员", "sort_order": 3},
+        {"value": "TOOL", "label": "工具", "sort_order": 4},
+    ],
 }
 
 _USER_REAL_NAME_BY_USERNAME = {
@@ -572,6 +658,98 @@ def _ensure_builtin_role_permissions(
         role = roles[role_code]
         for permission_code in permission_codes:
             _ensure_role_permission_binding(db, role, permissions[permission_code])
+
+
+def _ensure_dict_type(db: Session, seed: dict) -> SysDictType:
+    dict_type = db.execute(
+        select(SysDictType).where(
+            SysDictType.code == seed["code"],
+            SysDictType.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    if dict_type is None:
+        dict_type = SysDictType(**seed, created_by="system", updated_by="system")
+        db.add(dict_type)
+        db.flush()
+        print(f"  [+] 创建字典类型：{dict_type.name}（{dict_type.code}）")
+        return dict_type
+
+    changed = False
+    for field in ("name", "description", "sort_order", "is_active"):
+        if field in seed and getattr(dict_type, field) != seed[field]:
+            setattr(dict_type, field, seed[field])
+            changed = True
+    if changed:
+        dict_type.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新字典类型：{dict_type.name}（{dict_type.code}）")
+    else:
+        print(f"  [=] 字典类型已存在，跳过：{dict_type.name}（{dict_type.code}）")
+
+    return dict_type
+
+
+def _ensure_dict_types(db: Session) -> dict[str, SysDictType]:
+    dict_types: dict[str, SysDictType] = {}
+    for seed in _SYSTEM_DICT_TYPE_SEEDS:
+        dict_type = _ensure_dict_type(db, seed)
+        dict_types[dict_type.code] = dict_type
+    return dict_types
+
+
+def _ensure_dict_item(db: Session, dict_type: SysDictType, seed: dict) -> SysDictItem:
+    item = db.execute(
+        select(SysDictItem).where(
+            SysDictItem.dict_type_id == dict_type.id,
+            SysDictItem.value == seed["value"],
+            SysDictItem.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+
+    if item is None:
+        item = SysDictItem(
+            dict_type_id=dict_type.id,
+            value=seed["value"],
+            label=seed["label"],
+            description=seed.get("description"),
+            sort_order=seed.get("sort_order", 0),
+            is_active=seed.get("is_active", True),
+            extra_json=seed.get("extra_json"),
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(item)
+        db.flush()
+        print(f"  [+] 创建字典项：{dict_type.code}.{item.value}")
+        return item
+
+    changed = False
+    for field in ("label", "description", "sort_order", "is_active", "extra_json"):
+        new_val = seed.get(field)
+        if field == "is_active" and new_val is None:
+            new_val = True
+        elif field == "sort_order" and new_val is None:
+            new_val = 0
+            
+        if getattr(item, field) != new_val:
+            setattr(item, field, new_val)
+            changed = True
+    if changed:
+        item.updated_by = "system"
+        db.flush()
+        print(f"  [~] 更新字典项：{dict_type.code}.{item.value}")
+    else:
+        print(f"  [=] 字典项已存在，跳过：{dict_type.code}.{item.value}")
+
+    return item
+
+
+def _ensure_dict_items(db: Session, dict_types: dict[str, SysDictType]) -> None:
+    for dict_code, items in _SYSTEM_DICT_ITEM_SEEDS.items():
+        dict_type = dict_types[dict_code]
+        for seed in items:
+            _ensure_dict_item(db, dict_type, seed)
 
 
 # ── 主数据域初始化函数 ─────────────────────────────────────────────────────────
@@ -1018,57 +1196,67 @@ def run_seed() -> None:
         print("[Step 1] 初始化根部门...")
         dept = _ensure_root_department(db)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 2] 初始化模块六权限点...")
         permissions = _ensure_system_permissions(db)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 3] 初始化内置角色...")
         roles = _ensure_builtin_roles(db)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 4] 绑定内置角色与权限...")
         _ensure_builtin_role_permissions(db, roles, permissions)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 5] 初始化管理员账号...")
         user = _ensure_admin_user(db, dept)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 6] 绑定用户与角色...")
         _ensure_user_role_binding(db, user, roles["SUPER_ADMIN"])
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 7] 初始化量纲定义...")
         dimensions = _ensure_unit_dimensions(db)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 8] 初始化单位定义...")
         units = _ensure_units(db, dimensions)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 9] 初始化单位换算...")
         _ensure_unit_conversions(db, units)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 10] 初始化资源分类...")
         categories = _ensure_resource_categories(db)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
 
         print("\n[Step 11] 初始化属性定义...")
         _ensure_attr_definitions(db, units)
         db.commit()
-        print("  ✓ 已提交")
+        print("  [OK] 已提交")
+
+        print("\n[Step 12] 初始化系统级字典类型...")
+        dict_types = _ensure_dict_types(db)
+        db.commit()
+        print("  [OK] 已提交")
+
+        print("\n[Step 13] 初始化系统级字典项...")
+        _ensure_dict_items(db, dict_types)
+        db.commit()
+        print("  [OK] 已提交")
 
         print("\n[Done] 初始化完成，所有数据已提交。\n")
 

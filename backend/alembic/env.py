@@ -24,6 +24,7 @@ from app.core.config import settings  # noqa: E402
 # 每新增一个 models/*.py 文件，必须在此处 import，否则 autogenerate 不会感知
 from app.models.base import Base      # noqa: E402
 from app.models import system         # noqa: E402, F401
+from app.models import system_dictionary  # noqa: E402, F401
 
 # 后续新增模型时，在此追加（示例）：
 # from app.models import master_data   # noqa: F401

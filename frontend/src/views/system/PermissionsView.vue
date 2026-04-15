@@ -29,7 +29,7 @@
                 <div class="flex items-center gap-2 min-w-0">
                   <span class="text-sm truncate">{{ data.name }}</span>
                   <el-tag size="small" class="!text-xs" :type="actionTagType(data.action)">
-                    {{ data.action }}
+                    {{ getActionLabel(data.action) }}
                   </el-tag>
                 </div>
                 <div class="text-xs text-gray-400 truncate mt-0.5">{{ data.resource }} · {{ data.code }}</div>
@@ -91,7 +91,7 @@
         </div>
         <div>
           <div class="text-xs text-gray-400 mb-1">操作类型</div>
-          <el-tag :type="actionTagType(selectedPermission.action)">{{ selectedPermission.action }}</el-tag>
+          <el-tag :type="actionTagType(selectedPermission.action)">{{ getActionLabel(selectedPermission.action) }}</el-tag>
         </div>
         <div class="col-span-2">
           <div class="text-xs text-gray-400 mb-1">描述</div>
@@ -125,13 +125,18 @@ import { Delete, Edit, Plus } from '@element-plus/icons-vue'
 import { permApi } from '@/api/system'
 import type { Permission, PermissionAction } from '@/api/system'
 import PermissionFormDialog from '@/components/system/PermissionFormDialog.vue'
+import { PERMISSION_ACTION_OPTIONS } from '@/constants/systemDictionaries'
 import { useAuthStore } from '@/stores/auth'
+import { useDictionaryStore } from '@/stores/dictionaries'
+import { resolveDictionaryLabel, resolveDictionarySortOrder, resolveDictionaryTagType } from '@/utils/dictionaryDisplay'
 
 type PermissionTreeNode = Permission & { children: PermissionTreeNode[] }
 
 const authStore = useAuthStore()
+const dictionaryStore = useDictionaryStore()
 const canWritePermissions = computed(() => authStore.hasPermissionScope('/system/permissions:write'))
 const canDeletePermissions = computed(() => authStore.hasPermissionScope('/system/permissions:delete'))
+const permissionActionOptions = computed(() => dictionaryStore.getOptions('PERMISSION_ACTION', PERMISSION_ACTION_OPTIONS))
 
 const permissionList = ref<Permission[]>([])
 const selectedPermission = ref<Permission | null>(null)
@@ -184,23 +189,14 @@ async function deletePermission(permission: Permission) {
 }
 
 function actionTagType(action: PermissionAction) {
-  const map: Record<PermissionAction, '' | 'success' | 'warning' | 'danger'> = {
-    read: 'success',
-    write: '',
-    delete: 'danger',
-    admin: 'warning',
-  }
-  return map[action]
+  return resolveDictionaryTagType(permissionActionOptions.value, action, '')
+}
+
+function getActionLabel(action: PermissionAction) {
+  return resolveDictionaryLabel(permissionActionOptions.value, action, action)
 }
 
 function buildPermissionTree(items: Permission[]): PermissionTreeNode[] {
-  const actionOrder: Record<PermissionAction, number> = {
-    read: 0,
-    write: 1,
-    delete: 2,
-    admin: 3,
-  }
-
   const nodes = items.map((item) => ({ ...item, children: [] as PermissionTreeNode[] }))
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const linkedNodeIds = new Set<number>()
@@ -230,7 +226,8 @@ function buildPermissionTree(items: Permission[]): PermissionTreeNode[] {
     }
 
     const sortedGroup = [...group].sort((left, right) => {
-      const actionDiff = actionOrder[left.action] - actionOrder[right.action]
+      const actionDiff = resolveDictionarySortOrder(permissionActionOptions.value, left.action, 999)
+        - resolveDictionarySortOrder(permissionActionOptions.value, right.action, 999)
       if (actionDiff !== 0) {
         return actionDiff
       }
@@ -243,7 +240,8 @@ function buildPermissionTree(items: Permission[]): PermissionTreeNode[] {
 
   const sortTree = (treeNodes: PermissionTreeNode[]) => {
     treeNodes.sort((left, right) => {
-      const actionDiff = actionOrder[left.action] - actionOrder[right.action]
+      const actionDiff = resolveDictionarySortOrder(permissionActionOptions.value, left.action, 999)
+        - resolveDictionarySortOrder(permissionActionOptions.value, right.action, 999)
       if (actionDiff !== 0) {
         return actionDiff
       }

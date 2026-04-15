@@ -118,6 +118,9 @@
             <el-menu-item v-if="authStore.hasPermissionScope('/system/users:read')" index="/system/users">
               <el-icon><Avatar /></el-icon>用户管理
             </el-menu-item>
+            <el-menu-item v-if="authStore.hasPermissionScope('/system/dictionaries:read')" index="/system/dictionaries">
+              <el-icon><Collection /></el-icon>数据字典
+            </el-menu-item>
             <el-menu-item v-if="authStore.hasPermissionScope('/system/permissions:read')" index="/system/permissions">
               <el-icon><Operation /></el-icon>菜单权限
             </el-menu-item>

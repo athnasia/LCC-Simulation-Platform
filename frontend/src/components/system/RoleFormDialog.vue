@@ -62,7 +62,7 @@
             <div class="flex items-center gap-2 min-w-0 py-0.5">
               <span class="text-sm truncate">{{ data.name }}</span>
               <el-tag size="small" class="!text-xs" :type="actionTagType(data.action)">
-                {{ data.action }}
+                {{ getActionLabel(data.action) }}
               </el-tag>
               <span class="text-xs text-gray-400 truncate">{{ data.code }}</span>
             </div>
@@ -84,6 +84,9 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { roleApi } from '@/api/system'
 import type { Permission, RoleDetail, PermissionAction } from '@/api/system'
+import { PERMISSION_ACTION_OPTIONS } from '@/constants/systemDictionaries'
+import { useDictionaryStore } from '@/stores/dictionaries'
+import { resolveDictionaryLabel, resolveDictionarySortOrder, resolveDictionaryTagType } from '@/utils/dictionaryDisplay'
 
 type PermissionTreeNode = Pick<Permission, 'id' | 'name' | 'code' | 'action' | 'resource' | 'parent_id'> & {
   children: PermissionTreeNode[]
@@ -109,6 +112,8 @@ const isEdit = computed(() => !!props.data?.id)
 const loading = ref(false)
 const formRef = ref<FormInstance>()
 const permissionTreeRef = ref<any>()
+const dictionaryStore = useDictionaryStore()
+const permissionActionOptions = computed(() => dictionaryStore.getOptions('PERMISSION_ACTION', PERMISSION_ACTION_OPTIONS))
 
 const form = reactive({
   name: '',
@@ -129,13 +134,11 @@ const rules: FormRules = {
 const permissionTree = computed<PermissionTreeNode[]>(() => buildPermissionTree(props.allPermissions))
 
 const actionTagType = (action: PermissionAction) => {
-  const map: Record<PermissionAction, '' | 'success' | 'warning' | 'danger'> = {
-    read: 'success',
-    write: '',
-    delete: 'danger',
-    admin: 'warning',
-  }
-  return map[action]
+  return resolveDictionaryTagType(permissionActionOptions.value, action, '')
+}
+
+const getActionLabel = (action: PermissionAction) => {
+  return resolveDictionaryLabel(permissionActionOptions.value, action, action)
 }
 
 watch(
@@ -211,13 +214,6 @@ function syncCheckedPermissionsLater() {
 function buildPermissionTree(
   permissions: Pick<Permission, 'id' | 'name' | 'code' | 'action' | 'resource' | 'parent_id'>[],
 ): PermissionTreeNode[] {
-  const actionOrder: Record<PermissionAction, number> = {
-    read: 0,
-    write: 1,
-    delete: 2,
-    admin: 3,
-  }
-
   const nodes = permissions.map((permission) => ({ ...permission, children: [] as PermissionTreeNode[] }))
   const nodeMap = new Map(nodes.map((node) => [node.id, node]))
   const linkedNodeIds = new Set<number>()
@@ -247,7 +243,8 @@ function buildPermissionTree(
     }
 
     const sortedGroup = [...group].sort((left, right) => {
-      const actionDiff = actionOrder[left.action] - actionOrder[right.action]
+      const actionDiff = resolveDictionarySortOrder(permissionActionOptions.value, left.action, 999)
+        - resolveDictionarySortOrder(permissionActionOptions.value, right.action, 999)
       if (actionDiff !== 0) {
         return actionDiff
       }
@@ -260,7 +257,8 @@ function buildPermissionTree(
 
   const sortTree = (items: PermissionTreeNode[]) => {
     items.sort((left, right) => {
-      const actionDiff = actionOrder[left.action] - actionOrder[right.action]
+      const actionDiff = resolveDictionarySortOrder(permissionActionOptions.value, left.action, 999)
+        - resolveDictionarySortOrder(permissionActionOptions.value, right.action, 999)
       if (actionDiff !== 0) {
         return actionDiff
       }

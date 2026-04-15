@@ -256,6 +256,9 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { attrDefinitionApi, materialApi, ResourceType, unitApi } from '@/api/masterData'
 import type { AttrDataType, AttrDefinition, Material, ResourceCategoryTree, Unit } from '@/api/masterData'
+import { ATTR_DATA_TYPE_OPTIONS } from '@/constants/systemDictionaries'
+import { useDictionaryStore } from '@/stores/dictionaries'
+import { resolveDictionaryInputHint } from '@/utils/dictionaryDisplay'
 
 interface DynamicAttr {
   key: string
@@ -287,6 +290,8 @@ const unitLoading = ref(false)
 const dynamicAttrs = ref<DynamicAttr[]>([])
 const materialAttrDefs = ref<AttrDefinition[]>([])
 const attrDefMap = ref<Map<string, AttrDefinition>>(new Map())
+const dictionaryStore = useDictionaryStore()
+const attrDataTypeOptions = computed(() => dictionaryStore.getOptions('ATTR_DATA_TYPE', ATTR_DATA_TYPE_OPTIONS))
 
 const form = reactive({
   name: '',
@@ -375,15 +380,10 @@ function getAttrDataType(key: string): AttrDataType | null {
 function getAttrValuePlaceholder(key: string): string {
   const def = attrDefMap.value.get(key)
   if (!def) return '属性值'
-  const typeHints: Record<AttrDataType, string> = {
-    STRING: '文本',
-    NUMBER: '数字',
-    BOOLEAN: 'true/false',
-    JSON: 'JSON 格式',
-    DATE: '日期 (YYYY-MM-DD)',
-    ENUM: def.enum_values?.join(' / ') ?? '枚举值',
+  if (def.data_type === 'ENUM' && def.enum_values?.length) {
+    return def.enum_values.join(' / ')
   }
-  return typeHints[def.data_type] ?? '属性值'
+  return resolveDictionaryInputHint(attrDataTypeOptions.value, def.data_type, '属性值')
 }
 
 function convertValueByType(value: string, dataType: AttrDataType): unknown {
@@ -515,8 +515,9 @@ watch(
 
 watch(
   () => props.modelValue,
-  (val) => {
+  async (val) => {
     if (val) {
+      await dictionaryStore.ensureLoaded().catch(() => undefined)
       if (unitOptions.value.length === 0) {
         loadUnits()
       }

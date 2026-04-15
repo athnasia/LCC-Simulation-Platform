@@ -147,6 +147,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '系统管理', module: 'system', requiresSystemAccess: true },
         children: [
           {
+            path: 'dictionaries',
+            name: 'SystemDictionaries',
+            component: () => import('@/views/system/DictionariesView.vue'),
+            meta: { title: '数据字典', requiredPermissionScope: '/system/dictionaries:read' },
+          },
+          {
             path: 'users',
             name: 'Users',
             component: () => import('@/views/system/UsersView.vue'),

@@ -263,8 +263,8 @@ export const userApi = {
 // 五、审计日志 AuditLog（只读）
 // ═══════════════════════════════════════════════════════════════
 
-export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'RESET_PASSWORD' | 'CHANGE_PASSWORD'
-export type AuditResourceType = 'OrgDepartment' | 'SysPermission' | 'SysRole' | 'SysUser'
+export type AuditAction = string
+export type AuditResourceType = string
 
 export interface AuditLog {
   id: number

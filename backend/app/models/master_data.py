@@ -141,7 +141,7 @@ class MdResourceCategory(AuditMixin, Base):
     )
 
     name: Mapped[str] = mapped_column(String(50), nullable=False, comment="分类名称")
-    code: Mapped[str] = mapped_column(String(30), nullable=False, comment="分类编码")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="分类编码")
     resource_type: Mapped[ResourceType] = mapped_column(
         Enum(ResourceType), nullable=False, comment="资源类型（MATERIAL/EQUIPMENT/LABOR/TOOL）"
     )

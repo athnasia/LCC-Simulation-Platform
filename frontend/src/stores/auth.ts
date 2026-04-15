@@ -44,10 +44,14 @@ export const useAuthStore = defineStore('auth', () => {
       '/system/permissions:read',
       '/system/roles:read',
       '/system/audit-logs:read',
+      '/system/dictionaries:read',
     ].some((scope) => hasPermissionScope(scope))
   })
 
   function getFirstSystemRoute() {
+    if (hasPermissionScope('/system/dictionaries:read')) {
+      return '/system/dictionaries'
+    }
     if (hasPermissionScope('/system/users:read')) {
       return '/system/users'
     }

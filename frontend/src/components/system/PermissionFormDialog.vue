@@ -23,10 +23,12 @@
       </el-form-item>
       <el-form-item label="操作类型" prop="action">
         <el-select v-model="form.action" class="w-full">
-          <el-option label="read — 读取" value="read" />
-          <el-option label="write — 创建/更新" value="write" />
-          <el-option label="delete — 删除" value="delete" />
-          <el-option label="admin — 管理" value="admin" />
+          <el-option
+            v-for="option in actionOptions"
+            :key="option.value"
+            :label="`${option.value} — ${option.label}`"
+            :value="option.value"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="上级节点" prop="parent_id">
@@ -65,6 +67,8 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { permApi } from '@/api/system'
 import type { Permission, PermissionAction } from '@/api/system'
+import { PERMISSION_ACTION_OPTIONS } from '@/constants/systemDictionaries'
+import { useDictionaryStore } from '@/stores/dictionaries'
 
 const props = defineProps<{
   modelValue: boolean
@@ -86,6 +90,10 @@ const visible = computed({
 const isEdit = computed(() => !!props.data?.id)
 const loading = ref(false)
 const formRef = ref<FormInstance>()
+const dictionaryStore = useDictionaryStore()
+const actionOptions = computed(
+  () => dictionaryStore.getOptions('PERMISSION_ACTION', PERMISSION_ACTION_OPTIONS) as Array<{ label: string; value: PermissionAction }>,
+)
 
 const form = reactive({
   name: '',
@@ -134,6 +142,15 @@ watch(
   (defaultParentId) => {
     if (!props.data) {
       form.parent_id = defaultParentId ?? null
+    }
+  },
+)
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      void dictionaryStore.ensureLoaded().catch(() => undefined)
     }
   },
 )

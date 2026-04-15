@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { useDictionaryStore } from '@/stores/dictionaries'
 import App from './App.vue'
 import './style.css'
 
@@ -10,6 +11,7 @@ const pinia = createPinia()
 app.use(pinia)
 
 const authStore = useAuthStore(pinia)
+const dictionaryStore = useDictionaryStore(pinia)
 
 router.beforeEach(async (to) => {
   if (to.path === '/login') {
@@ -38,6 +40,8 @@ router.beforeEach(async (to) => {
       }
     }
   }
+
+  await dictionaryStore.ensureLoaded().catch(() => undefined)
 
   if (to.matched.some((record) => record.meta.requiresSystemAccess) && !authStore.hasSystemAccess) {
     return '/dashboard'
