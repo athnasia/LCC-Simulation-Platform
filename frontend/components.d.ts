@@ -61,6 +61,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTree: typeof import('element-plus/es')['ElTree']
     ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
+    EquipmentFormDialog: typeof import('./src/components/master-data/EquipmentFormDialog.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     MaterialFormDialog: typeof import('./src/components/master-data/MaterialFormDialog.vue')['default']
     PermissionFormDialog: typeof import('./src/components/system/PermissionFormDialog.vue')['default']
