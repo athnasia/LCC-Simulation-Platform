@@ -75,6 +75,7 @@ export interface Product {
   code: string
   project_id: number
   description: string | null
+  attributes: Record<string, any> | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -92,6 +93,7 @@ export interface ProductCreate {
   code: string
   project_id: number
   description?: string | null
+  attributes?: Record<string, any> | null
   is_active?: boolean
 }
 
@@ -229,6 +231,7 @@ export interface BomNode {
   quantity: number | null
   sort_order: number
   is_configured: boolean
+  attributes: Record<string, any> | null
   description: string | null
   created_at: string
   updated_at: string
@@ -256,6 +259,7 @@ export interface BomNodeCreate {
   quantity?: number | null
   sort_order?: number
   is_configured?: boolean
+  attributes?: Record<string, any> | null
   description?: string | null
 }
 
@@ -341,7 +345,7 @@ export interface RouteStepBind {
   step_order: number
   override_t_set: number | null
   override_t_run: number | null
-  override_mat_qty: number | null
+  override_mat_params: Record<string, number> | null
   description: string | null
   created_at: string
   updated_at: string
@@ -369,7 +373,7 @@ export interface RouteStepBindCreate {
   step_order: number
   override_t_set?: number | null
   override_t_run?: number | null
-  override_mat_qty?: number | null
+  override_mat_params?: Record<string, number> | null
   description?: string | null
 }
 

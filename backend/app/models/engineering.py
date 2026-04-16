@@ -15,6 +15,7 @@
   1. 所有表必须继承 AuditMixin 基类，包含标准审计字段
   2. 严格支持版本号 (version) 管理，禁止直接覆盖更新
   3. 所有关键业务对象支持逻辑删除
+  4. 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
 """
 
 from decimal import Decimal
@@ -43,6 +44,7 @@ from app.models.base import AuditMixin, Base
 class EngProject(AuditMixin, Base):
     __tablename__ = "eng_project"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint("code", "is_deleted", name="uq_eng_project_code_deleted"),
     )
 
@@ -63,6 +65,7 @@ class EngProject(AuditMixin, Base):
 class EngProduct(AuditMixin, Base):
     __tablename__ = "eng_product"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint("code", "is_deleted", name="uq_eng_product_code_deleted"),
     )
 
@@ -72,6 +75,9 @@ class EngProduct(AuditMixin, Base):
         BigInteger, ForeignKey("eng_project.id"), nullable=False, comment="所属项目 ID"
     )
     description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="产品描述")
+    attributes: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="柔性属性（从基础字典与模板中拉取）"
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="1", comment="是否启用"
     )
@@ -87,6 +93,7 @@ class EngProduct(AuditMixin, Base):
 class EngDesignScheme(AuditMixin, Base):
     __tablename__ = "eng_design_scheme"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint("code", "is_deleted", name="uq_eng_design_scheme_code_deleted"),
     )
 
@@ -111,6 +118,7 @@ class EngDesignScheme(AuditMixin, Base):
 class EngDesignSchemeVersion(AuditMixin, Base):
     __tablename__ = "eng_design_scheme_version"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint(
             "scheme_id", "version", "is_deleted", 
             name="uq_eng_design_scheme_version_unique"
@@ -146,6 +154,7 @@ class EngDesignSchemeVersion(AuditMixin, Base):
 class EngBomNode(AuditMixin, Base):
     __tablename__ = "eng_bom_node"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint(
             "scheme_version_id", "code", "is_deleted", 
             name="uq_eng_bom_node_code_unique"
@@ -176,6 +185,9 @@ class EngBomNode(AuditMixin, Base):
     is_configured: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="0", comment="是否已配置工艺路线"
     )
+    attributes: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="柔性属性（从基础字典与模板中拉取）"
+    )
     description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="节点描述")
 
     scheme_version: Mapped["EngDesignSchemeVersion"] = relationship(
@@ -197,6 +209,7 @@ class EngBomNode(AuditMixin, Base):
 class EngComponentProcessRoute(AuditMixin, Base):
     __tablename__ = "eng_component_process_route"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint(
             "bom_node_id", "route_code", "is_deleted", 
             name="uq_eng_component_process_route_unique"
@@ -229,6 +242,7 @@ class EngComponentProcessRoute(AuditMixin, Base):
 class EngRouteStepBind(AuditMixin, Base):
     __tablename__ = "eng_route_step_bind"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint(
             "route_id", "step_order", "is_deleted", 
             name="uq_eng_route_step_bind_unique"
@@ -255,8 +269,8 @@ class EngRouteStepBind(AuditMixin, Base):
     override_t_run: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True, comment="覆写运行工时（h）"
     )
-    override_mat_qty: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 4), nullable=True, comment="覆写辅材消耗数量"
+    override_mat_params: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="覆写辅材参数（如：{'M_T_001': 2.0, 'LIQUID_01': 0.5}）"
     )
     
     description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="步骤描述")
@@ -272,6 +286,7 @@ class EngRouteStepBind(AuditMixin, Base):
 class EngModelSnapshot(AuditMixin, Base):
     __tablename__ = "eng_model_snapshot"
     __table_args__ = (
+        # 依赖 AuditMixin 中的 is_deleted (时间戳) 实现逻辑删除唯一性
         UniqueConstraint(
             "scheme_version_id", "snapshot_code", "is_deleted", 
             name="uq_eng_model_snapshot_unique"

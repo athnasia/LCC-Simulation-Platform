@@ -58,6 +58,69 @@ export const useEngineeringStore = defineStore('engineering', () => {
   const schemeVersions = ref<DesignSchemeVersion[]>([])
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // 辅助函数
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * 递归检查所有叶子节点是否已配置工艺路线
+   * @param nodes BOM 节点树
+   * @returns 是否所有叶子节点都已配置
+   */
+  function checkAllLeafNodesConfigured(nodes: BomNodeTree[]): boolean {
+    for (const node of nodes) {
+      // 如果是叶子节点（没有子节点或子节点为空）
+      if (!node.children || node.children.length === 0) {
+        // 如果叶子节点未配置，返回 false
+        if (!node.is_configured) {
+          return false
+        }
+      } else {
+        // 如果是装配节点（有子节点），递归检查子节点
+        if (!checkAllLeafNodesConfigured(node.children)) {
+          return false
+        }
+      }
+    }
+    return true
+  }
+
+  /**
+   * 统计叶子节点数量
+   * @param nodes BOM 节点树
+   * @returns 叶子节点总数
+   */
+  function countLeafNodes(nodes: BomNodeTree[]): number {
+    let count = 0
+    for (const node of nodes) {
+      if (!node.children || node.children.length === 0) {
+        count++
+      } else {
+        count += countLeafNodes(node.children)
+      }
+    }
+    return count
+  }
+
+  /**
+   * 统计已配置的叶子节点数量
+   * @param nodes BOM 节点树
+   * @returns 已配置的叶子节点数量
+   */
+  function countConfiguredLeafNodes(nodes: BomNodeTree[]): number {
+    let count = 0
+    for (const node of nodes) {
+      if (!node.children || node.children.length === 0) {
+        if (node.is_configured) {
+          count++
+        }
+      } else {
+        count += countConfiguredLeafNodes(node.children)
+      }
+    }
+    return count
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // 计算属性
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -70,9 +133,29 @@ export const useEngineeringStore = defineStore('engineering', () => {
     return selectedBomNode.value?.is_configured ?? false
   })
 
+  // 所有叶子节点是否都已配置工艺路线
+  const isAllLeafNodesConfigured = computed(() => {
+    if (bomTree.value.length === 0) {
+      return false
+    }
+    return checkAllLeafNodesConfigured(bomTree.value)
+  })
+
+  // 叶子节点配置统计
+  const leafNodeStats = computed(() => {
+    const total = countLeafNodes(bomTree.value)
+    const configured = countConfiguredLeafNodes(bomTree.value)
+    return {
+      total,
+      configured,
+      unconfigured: total - configured,
+      percentage: total > 0 ? Math.round((configured / total) * 100) : 0,
+    }
+  })
+
   // 当前方案版本是否可以生成快照
   const canGenerateSnapshot = computed(() => {
-    return hasCurrentSchemeVersion.value && bomTree.value.length > 0
+    return hasCurrentSchemeVersion.value && bomTree.value.length > 0 && isAllLeafNodesConfigured.value
   })
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -427,6 +510,15 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function generateSnapshot(data: GenerateSnapshotRequest): Promise<GenerateSnapshotResponse | null> {
+    // 前置校验：检查是否所有叶子节点都已配置
+    if (!isAllLeafNodesConfigured.value) {
+      const stats = leafNodeStats.value
+      ElMessage.error(
+        `还有 ${stats.unconfigured} 个零件未配置工艺路线，无法生成快照。当前进度：${stats.configured}/${stats.total}`
+      )
+      return null
+    }
+
     try {
       const res = await modelSnapshotApi.generate(data)
       
@@ -496,6 +588,8 @@ export const useEngineeringStore = defineStore('engineering', () => {
     hasSelectedRoute,
     hasCurrentSchemeVersion,
     isCurrentNodeConfigured,
+    isAllLeafNodesConfigured,
+    leafNodeStats,
     canGenerateSnapshot,
 
     // Actions

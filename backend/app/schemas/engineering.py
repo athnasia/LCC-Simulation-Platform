@@ -15,6 +15,7 @@
   1. 所有响应模型必须包含 id 和审计字段
   2. 所有创建/更新模型必须包含字段验证规则
   3. Decimal 类型字段必须设置精度约束
+  4. 注意：is_deleted 字段为时间戳类型（BigInteger），不是 Boolean
 """
 
 from datetime import datetime
@@ -65,6 +66,7 @@ class ProductBase(BaseModel):
     code: str = Field(..., min_length=1, max_length=50, description="产品编码")
     project_id: int = Field(..., description="所属项目 ID")
     description: str | None = Field(None, max_length=512, description="产品描述")
+    attributes: dict[str, Any] | None = Field(None, description="柔性属性（从基础字典与模板中拉取）")
     is_active: bool = Field(True, description="是否启用")
 
 
@@ -75,6 +77,7 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=512)
+    attributes: dict[str, Any] | None = None
     is_active: bool | None = None
 
 
@@ -168,6 +171,7 @@ class BomNodeBase(BaseModel):
     quantity: Decimal | None = Field(None, ge=0, description="数量")
     sort_order: int = Field(0, ge=0, description="排序值")
     is_configured: bool = Field(False, description="是否已配置工艺路线")
+    attributes: dict[str, Any] | None = Field(None, description="柔性属性（从基础字典与模板中拉取）")
     description: str | None = Field(None, max_length=512, description="节点描述")
 
 
@@ -181,6 +185,7 @@ class BomNodeUpdate(BaseModel):
     quantity: Decimal | None = Field(None, ge=0)
     sort_order: int | None = Field(None, ge=0)
     is_configured: bool | None = None
+    attributes: dict[str, Any] | None = None
     description: str | None = Field(None, max_length=512)
 
 
@@ -243,7 +248,10 @@ class RouteStepBindBase(BaseModel):
     step_order: int = Field(..., ge=1, description="工序顺序")
     override_t_set: Decimal | None = Field(None, ge=0, description="覆写准备工时（h）")
     override_t_run: Decimal | None = Field(None, ge=0, description="覆写运行工时（h）")
-    override_mat_qty: Decimal | None = Field(None, ge=0, description="覆写辅材消耗数量")
+    override_mat_params: dict[str, Any] | None = Field(
+        None, 
+        description="覆写辅材参数（如：{'M_T_001': 2.0, 'LIQUID_01': 0.5}）"
+    )
     description: str | None = Field(None, max_length=512, description="步骤描述")
 
 
@@ -255,7 +263,7 @@ class RouteStepBindUpdate(BaseModel):
     step_order: int | None = Field(None, ge=1)
     override_t_set: Decimal | None = Field(None, ge=0)
     override_t_run: Decimal | None = Field(None, ge=0)
-    override_mat_qty: Decimal | None = Field(None, ge=0)
+    override_mat_params: dict[str, Any] | None = None
     description: str | None = Field(None, max_length=512)
 
 
