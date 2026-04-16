@@ -141,9 +141,6 @@ class ProcessService:
     ) -> ProcessResponse:
         process = self._get_or_404(process_id)
 
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=process_id)
-
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(process, field, value)

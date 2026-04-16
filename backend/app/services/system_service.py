@@ -19,10 +19,19 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """自定义 JSON 编码器，处理 Decimal 类型"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
 from app.core.security import hash_password, verify_password
@@ -802,7 +811,7 @@ class AuditLogService:
             action=action,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id is not None else None,
-            detail=json.dumps(detail, ensure_ascii=False) if detail else None,
+            detail=json.dumps(detail, ensure_ascii=False, cls=DecimalEncoder) if detail else None,
             ip_address=ip_address,
             user_agent=user_agent,
         )

@@ -126,6 +126,22 @@ async def unit_conversion_exception_handler(
     )
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    全局异常处理器，捕获所有未处理的异常，返回详细的错误信息。
+    """
+    import traceback
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": "INTERNAL_SERVER_ERROR",
+            "message": str(exc),
+            "detail": traceback.format_exc(),
+        },
+    )
+
+
 # ── 路由注册 ───────────────────────────────────────────────────────────────────
 
 _API_PREFIX = "/api/v1"

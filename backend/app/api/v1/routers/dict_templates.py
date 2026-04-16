@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, get_db, require_permission
+from app.models.master_data import DataType, ResourceType
 from app.models.system import SysUser
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
@@ -439,8 +440,8 @@ def delete_category(
 )
 def list_attributes(
     keyword: str | None = Query(None, description="属性名称或编码关键字"),
-    data_type: str | None = Query(None, description="数据类型"),
-    resource_type: str | None = Query(None, description="适用资源类型"),
+    data_type: DataType | None = Query(None, description="数据类型"),
+    resource_type: ResourceType | None = Query(None, description="适用资源类型"),
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=500, description="每页数量"),
     db: Session = Depends(get_db),

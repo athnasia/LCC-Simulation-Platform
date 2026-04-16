@@ -95,7 +95,7 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right">
+          <el-table-column label="操作" width="140" fixed="right" align="center">
             <template #default="{ row }">
               <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
@@ -163,7 +163,7 @@ function formatDate(dateStr: string) {
 
 async function loadCategoryTree() {
   try {
-    const res = await resourceCategoryApi.getTree('PROCESS')
+    const res = await resourceCategoryApi.tree('PROCESS')
     categoryTree.value = res.data
   } catch (err) {
     console.error('Failed to load category tree:', err)
@@ -203,7 +203,7 @@ function openCreateDialog() {
 }
 
 function openEditDialog(row: Process) {
-  currentProcess.value = structuredClone(row)
+  currentProcess.value = JSON.parse(JSON.stringify(row))
   dialogVisible.value = true
 }
 
@@ -213,6 +213,7 @@ async function handleDelete(row: Process) {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
       type: 'warning',
+      center: true,
     })
     await processApi.remove(row.id)
     ElMessage.success('删除成功')

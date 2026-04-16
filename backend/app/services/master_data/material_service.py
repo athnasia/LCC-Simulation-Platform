@@ -3,7 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
-from app.models.master_data import MdAttrDefinition, MdMaterial, MdResourceCategory, ResourceType
+from app.models.master_data import DataType, MdAttrDefinition, MdMaterial, MdResourceCategory, ResourceType
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     AttrDefinitionCreate,
@@ -48,6 +48,7 @@ class AttrDefinitionService:
     def list(
         self,
         keyword: str | None = None,
+        data_type: DataType | None = None,
         resource_type: ResourceType | None = None,
         page: int = 1,
         size: int = 20,
@@ -56,6 +57,9 @@ class AttrDefinitionService:
 
         if keyword:
             stmt = stmt.where(MdAttrDefinition.name.ilike(f"%{keyword}%"))
+        
+        if data_type:
+            stmt = stmt.where(MdAttrDefinition.data_type == data_type)
         
         # JSON 包含查询：检查 resource_type 是否在 applicable_resource_types 数组中
         if resource_type:

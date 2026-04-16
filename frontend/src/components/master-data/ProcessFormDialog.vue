@@ -464,8 +464,14 @@ watch(visible, async (val) => {
     
     if (isEdit.value && props.data) {
       Object.assign(form, {
-        ...props.data,
-        dynamic_attributes: { ...(props.data.dynamic_attributes || {}) }
+        code: props.data.code,
+        name: props.data.name,
+        category_id: props.data.category_id,
+        setup_time: props.data.setup_time,
+        standard_time: props.data.standard_time,
+        dynamic_attributes: { ...(props.data.dynamic_attributes || {}) },
+        is_active: props.data.is_active,
+        description: props.data.description
       })
       
       if (props.data.dynamic_attributes) {
@@ -535,13 +541,12 @@ async function handleSubmit() {
         // Edit flow: Update base properties first
         const payload = {
           name: form.name,
-          code: form.code,
           category_id: form.category_id,
           setup_time: form.setup_time,
           standard_time: form.standard_time,
-          dynamic_attributes: form.dynamic_attributes,
+          dynamic_attributes: Object.keys(form.dynamic_attributes).length > 0 ? form.dynamic_attributes : null,
           is_active: form.is_active,
-          description: form.description
+          description: form.description || null
         }
         await processApi.update(props.data!.id, payload)
         
@@ -602,9 +607,9 @@ async function handleSubmit() {
           category_id: form.category_id,
           setup_time: form.setup_time,
           standard_time: form.standard_time,
-          dynamic_attributes: form.dynamic_attributes,
+          dynamic_attributes: Object.keys(form.dynamic_attributes).length > 0 ? form.dynamic_attributes : null,
           is_active: form.is_active,
-          description: form.description,
+          description: form.description || null,
           resources: allResources.map(r => ({
             resource_type: r.resource_type as 'MATERIAL' | 'EQUIPMENT' | 'LABOR' | 'TOOL',
             resource_id: r.resource_id!,

@@ -44,6 +44,7 @@ class LaborService:
     def list(
         self,
         keyword: str | None = None,
+        labor_type: str | None = None,
         skill_level: str | None = None,
         is_active: bool | None = None,
         page: int = 1,
@@ -58,6 +59,8 @@ class LaborService:
                     MdLabor.code.ilike(f"%{keyword}%"),
                 )
             )
+        if labor_type:
+            stmt = stmt.where(MdLabor.labor_type == labor_type)
         if skill_level:
             stmt = stmt.where(MdLabor.skill_level == skill_level)
         if is_active is not None:
