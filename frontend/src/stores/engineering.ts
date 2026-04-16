@@ -46,6 +46,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
   const processRoutes = ref<ComponentProcessRoute[]>([])
   const selectedRoute = ref<ComponentProcessRoute | null>(null)
   const routeSteps = ref<RouteStepBindWithProcess[]>([])
+  const selectedStep = ref<RouteStepBindWithProcess | null>(null)
   const routesLoading = ref(false)
   const stepsLoading = ref(false)
 
@@ -405,12 +406,19 @@ export const useEngineeringStore = defineStore('engineering', () => {
     try {
       const res = await routeStepBindApi.listWithProcess(routeId)
       routeSteps.value = res.data
+      
+      // 清空选中的步骤
+      selectedStep.value = null
     } catch (error) {
       console.error('Failed to load route steps:', error)
       ElMessage.error('加载路线步骤失败')
     } finally {
       stepsLoading.value = false
     }
+  }
+
+  function selectStep(step: RouteStepBindWithProcess | null) {
+    selectedStep.value = step
   }
 
   async function addRouteStep(processId: number) {
@@ -559,6 +567,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
     processRoutes.value = []
     selectedRoute.value = null
     routeSteps.value = []
+    selectedStep.value = null
     snapshots.value = []
     currentSnapshot.value = null
     schemeVersions.value = []
@@ -576,6 +585,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
     processRoutes,
     selectedRoute,
     routeSteps,
+    selectedStep,
     routesLoading,
     stepsLoading,
     snapshots,
@@ -608,6 +618,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
     createProcessRoute,
     deleteProcessRoute,
     loadRouteSteps,
+    selectStep,
     addRouteStep,
     updateRouteStep,
     deleteRouteStep,

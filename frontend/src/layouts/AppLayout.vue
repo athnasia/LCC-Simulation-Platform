@@ -76,8 +76,8 @@
             <el-menu-item index="/engineering/projects">
               <el-icon><FolderOpened /></el-icon>产品方案池
             </el-menu-item>
-            <el-menu-item index="/engineering/modeling">
-              <el-icon><Connection /></el-icon>设计要素编排
+            <el-menu-item index="/engineering/workbench">
+              <el-icon><Connection /></el-icon>工程建模工作台
             </el-menu-item>
           </el-sub-menu>
 
