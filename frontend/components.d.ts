@@ -12,6 +12,8 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AttrFormDialog: typeof import('./src/components/master-data/AttrFormDialog.vue')['default']
+    BomNodeDialog: typeof import('./src/components/engineering/BomNodeDialog.vue')['default']
+    BomTreePanel: typeof import('./src/components/engineering/BomTreePanel.vue')['default']
     DeptFormDialog: typeof import('./src/components/system/DeptFormDialog.vue')['default']
     DictItemFormDialog: typeof import('./src/components/system/DictItemFormDialog.vue')['default']
     DictTypeFormDialog: typeof import('./src/components/system/DictTypeFormDialog.vue')['default']
