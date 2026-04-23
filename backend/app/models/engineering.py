@@ -325,8 +325,11 @@ class EngModelSnapshot(AuditMixin, Base):
     snapshot_data: Mapped[dict] = mapped_column(
         JSON, nullable=False, comment="快照数据（包含 BOM 树、工艺路线、资源费率等完整信息）"
     )
+    simulation_result: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="LCC 仿真结果（时间轴事件、总成本、异常信息）"
+    )
     status: Mapped[str] = mapped_column(
-        String(20), default="DRAFT", comment="状态（DRAFT/READY/ARCHIVED）"
+        String(20), default="DRAFT", comment="状态（DRAFT/READY/SIMULATING/COMPLETED/FAILED/ARCHIVED）"
     )
     description: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="快照描述")
 

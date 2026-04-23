@@ -89,6 +89,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/engineering/ModelingWorkbenchView.vue'),
             meta: { title: '工程建模工作台', requiredPermissionScope: '/engineering/workbench:read' },
           },
+          {
+            path: 'cost-ledger/:snapshotId?',
+            name: 'CostLedger',
+            component: () => import('@/views/engineering/CostLedgerView.vue'),
+            meta: { title: '静态成本台账', requiredPermissionScope: '/engineering/snapshots:read' },
+          },
         ],
       },
 
@@ -97,20 +103,20 @@ const routes: RouteRecordRaw[] = [
         path: 'costing',
         name: 'Costing',
         component: () => import('@/layouts/RouteSectionView.vue'),
-        redirect: '/costing/rules',
+        redirect: '/costing/snapshot-center',
         meta: { title: '成本核算', module: 'costing' },
         children: [
+          {
+            path: 'snapshot-center',
+            name: 'SnapshotCenter',
+            component: () => import('@/views/engineering/SnapshotCenterView.vue'),
+            meta: { title: '全景快照中心', requiredPermissionScope: '/costing/snapshot-center:read' },
+          },
           {
             path: 'rules',
             name: 'CostingRules',
             component: () => import('@/views/costing/RulesView.vue'),
-            meta: { title: '作业成本规则配置' },
-          },
-          {
-            path: 'ledger',
-            name: 'CostingLedger',
-            component: () => import('@/views/costing/LedgerView.vue'),
-            meta: { title: '静态产品成本台账' },
+            meta: { title: '作业成本规则配置', requiredPermissionScope: '/costing/rules:read' },
           },
         ],
       },

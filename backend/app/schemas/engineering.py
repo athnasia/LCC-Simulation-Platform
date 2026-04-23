@@ -312,7 +312,8 @@ class ModelSnapshotBase(BaseModel):
     snapshot_code: str = Field(..., min_length=1, max_length=50, description="快照编码")
     snapshot_name: str = Field(..., min_length=1, max_length=100, description="快照名称")
     snapshot_data: dict[str, Any] = Field(..., description="快照数据")
-    status: str = Field("DRAFT", description="状态（DRAFT/READY/ARCHIVED）")
+    simulation_result: dict[str, Any] | None = Field(None, description="LCC 仿真结果")
+    status: str = Field("DRAFT", description="状态（DRAFT/READY/SIMULATING/COMPLETED/FAILED/ARCHIVED）")
     description: str | None = Field(None, max_length=512, description="快照描述")
 
 

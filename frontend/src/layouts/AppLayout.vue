@@ -87,11 +87,11 @@
               <el-icon><Money /></el-icon>
               <span>成本核算</span>
             </template>
-            <el-menu-item index="/costing/rules">
-              <el-icon><Tickets /></el-icon>作业成本规则
+            <el-menu-item v-if="authStore.hasPermissionScope('/costing/snapshot-center:read')" index="/costing/snapshot-center">
+              <el-icon><DocumentCopy /></el-icon>全景快照中心
             </el-menu-item>
-            <el-menu-item index="/costing/ledger">
-              <el-icon><Document /></el-icon>产品成本台账
+            <el-menu-item v-if="authStore.hasPermissionScope('/costing/rules:read')" index="/costing/rules">
+              <el-icon><Tickets /></el-icon>作业成本规则
             </el-menu-item>
           </el-sub-menu>
 
@@ -206,6 +206,7 @@ import {
   User, Edit, FolderOpened, Connection, Money, Tickets, Document,
   DataLine, VideoPlay, Tools, Avatar, Key, List, DArrowLeft,
   DArrowRight, Location, UserFilled, ArrowDown, SwitchButton,
+  DocumentCopy,
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'

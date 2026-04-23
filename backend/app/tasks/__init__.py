@@ -9,7 +9,7 @@ celery_app = Celery(
 	"lcc_app",
 	broker=settings.CELERY_BROKER_URL,
 	backend=settings.CELERY_RESULT_BACKEND,
-	include=["app.tasks"],
+	include=["app.worker.tasks"],
 )
 
 celery_app.conf.update(
@@ -21,6 +21,8 @@ celery_app.conf.update(
 	enable_utc=False,
 	task_track_started=True,
 )
+
+celery_app.loader.import_default_modules()
 
 
 @celery_app.task(name="app.tasks.ping")

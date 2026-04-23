@@ -233,6 +233,44 @@
       :scheme-id="currentSchemeId"
       @success="handleVersionSuccess"
     />
+    
+    <!-- 快照选择对话框 -->
+    <el-dialog
+      v-model="snapshotDialogVisible"
+      title="选择快照查看成本台账"
+      width="600px"
+      destroy-on-close
+    >
+      <el-table
+        :data="snapshots"
+        v-loading="snapshotsLoading"
+        border
+        stripe
+        size="small"
+      >
+        <el-table-column prop="snapshot_code" label="快照编码" width="150" />
+        <el-table-column prop="snapshot_name" label="快照名称" />
+        <el-table-column prop="status" label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'READY' ? 'success' : 'info'" size="small">
+              {{ row.status === 'READY' ? '就绪' : '草稿' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="160" />
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="handleViewCostLedger(row.id)"
+            >
+              查看成本台账
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -241,7 +279,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElTree } from 'element-plus'
 import { Plus, Edit, Delete, Folder, Box, Document } from '@element-plus/icons-vue'
-import { projectApi, productApi, designSchemeApi, designSchemeVersionApi } from '@/api/engineering'
+import { projectApi, productApi, designSchemeApi, designSchemeVersionApi, modelSnapshotApi } from '@/api/engineering'
 import ProjectDialog from '@/components/engineering/ProjectDialog.vue'
 import ProductDialog from '@/components/engineering/ProductDialog.vue'
 import SchemeDialog from '@/components/engineering/SchemeDialog.vue'
@@ -272,6 +310,11 @@ const projectDialogVisible = ref(false)
 const productDialogVisible = ref(false)
 const schemeDialogVisible = ref(false)
 const versionDialogVisible = ref(false)
+const snapshotDialogVisible = ref(false)
+
+const snapshots = ref<any[]>([])
+const snapshotsLoading = ref(false)
+const currentVersionId = ref<number | null>(null)
 
 const editingProject = ref<any>(null)
 const editingProduct = ref<any>(null)
@@ -480,11 +523,31 @@ function handleOpenWorkbench(schemeId: number, versionId: number, status: string
   })
 }
 
-function handleOpenSnapshots(schemeId: number, versionId: number) {
-  router.push({
-    path: '/engineering/snapshots',
-    query: { schemeId, versionId },
-  })
+async function handleOpenSnapshots(schemeId: number, versionId: number) {
+  currentVersionId.value = versionId
+  snapshotsLoading.value = true
+  snapshotDialogVisible.value = true
+  
+  try {
+    const res = await modelSnapshotApi.list({ scheme_version_id: versionId, size: 100 })
+    snapshots.value = res.data.items || []
+    
+    if (snapshots.value.length === 0) {
+      ElMessage.warning('该版本暂无快照，请先生成快照')
+      snapshotDialogVisible.value = false
+    }
+  } catch (error: any) {
+    console.error('获取快照列表失败:', error)
+    ElMessage.error(error.response?.data?.message || '获取快照列表失败')
+    snapshotDialogVisible.value = false
+  } finally {
+    snapshotsLoading.value = false
+  }
+}
+
+function handleViewCostLedger(snapshotId: number) {
+  snapshotDialogVisible.value = false
+  router.push(`/engineering/cost-ledger/${snapshotId}`)
 }
 
 function handleDialogSuccess() {
