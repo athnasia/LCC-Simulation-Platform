@@ -113,7 +113,7 @@
             </template>
           </el-table-column>
           
-          <el-table-column label="静态总成本" width="140" align="right">
+          <el-table-column label="总成本" width="140" align="right">
             <template #default="{ row }">
               <span class="cost-value">{{ formatCurrency(row.total_cost) }}</span>
             </template>
@@ -147,7 +147,7 @@
                 <template v-else-if="row.status === 'SIMULATING'">
                   <el-button link disabled>
                     <el-icon class="is-loading"><Loading /></el-icon>
-                    仿真进度
+                    推演中...
                   </el-button>
                 </template>
                 
@@ -157,6 +157,21 @@
                   </el-button>
                   <el-button type="success" size="small" @click="handleViewReport(row)">
                     查看LCC报告
+                  </el-button>
+                </template>
+
+                <template v-else-if="row.status === 'FAILED'">
+                  <el-button link type="primary" @click="handleViewLedger(row)">
+                    查看台账
+                  </el-button>
+                  <el-button type="danger" size="small" @click="handleStartSimulation(row)">
+                    重新仿真
+                  </el-button>
+                </template>
+
+                <template v-else>
+                  <el-button link disabled>
+                    暂不可用
                   </el-button>
                 </template>
               </div>
@@ -180,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -193,6 +208,18 @@ import {
 } from '@element-plus/icons-vue'
 import { modelSnapshotApi, type ModelSnapshot } from '@/api/engineering'
 import { getStaticCostLedger } from '@/api/costing'
+import {
+  getSimulationStatus,
+  startLccSimulation,
+  type SimulationResult,
+  type SimulationStatusResponse,
+} from '@/api/simulation'
+
+type SnapshotStatus = 'DRAFT' | 'READY' | 'SIMULATING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED'
+
+type SnapshotListItem = ModelSnapshot & {
+  simulation_result?: SimulationResult | null
+}
 
 interface Snapshot {
   id: number
@@ -200,12 +227,15 @@ interface Snapshot {
   snapshot_name: string
   scheme_name: string
   total_cost: number
-  status: 'READY' | 'SIMULATING' | 'COMPLETED'
+  status: SnapshotStatus
   created_at: string
+  simulation_result: SimulationResult | null
 }
 
 const router = useRouter()
 const loading = ref(false)
+const pollingTimers = new Map<number, number>()
+let isDisposed = false
 
 const stats = reactive({
   totalSnapshots: 0,
@@ -226,7 +256,7 @@ const pagination = reactive({
 })
 
 const snapshots = ref<Snapshot[]>([])
-const allSnapshots = ref<ModelSnapshot[]>([])
+const allSnapshots = ref<SnapshotListItem[]>([])
 
 const filteredSnapshots = computed(() => {
   let result = [...snapshots.value]
@@ -248,7 +278,7 @@ const filteredSnapshots = computed(() => {
   if (filterForm.dateRange && filterForm.dateRange.length === 2) {
     const [start, end] = filterForm.dateRange
     result = result.filter(item => {
-      const date = item.created_at.split(' ')[0]
+      const date = item.created_at.slice(0, 10)
       return date >= start && date <= end
     })
   }
@@ -268,7 +298,9 @@ const getStatusType = (status: string): string => {
     READY: 'primary',
     SIMULATING: 'warning',
     COMPLETED: 'success',
+    FAILED: 'danger',
     DRAFT: 'info',
+    ARCHIVED: 'info',
   }
   return map[status] || 'info'
 }
@@ -278,9 +310,141 @@ const getStatusText = (status: string): string => {
     READY: '静态已生成',
     SIMULATING: '仿真推演中',
     COMPLETED: '仿真完成',
+    FAILED: '仿真失败',
     DRAFT: '草稿',
+    ARCHIVED: '已归档',
   }
   return map[status] || status
+}
+
+const syncStats = () => {
+  stats.totalSnapshots = snapshots.value.length
+  stats.simulationsCompleted = snapshots.value.filter(item => item.status === 'COMPLETED').length
+  stats.costAlerts = snapshots.value.filter(item => item.status === 'FAILED').length
+}
+
+const normalizeStatus = (status: string): SnapshotStatus => {
+  if (status === 'READY' || status === 'SIMULATING' || status === 'COMPLETED' || status === 'FAILED' || status === 'ARCHIVED') {
+    return status
+  }
+  return 'DRAFT'
+}
+
+const toNumber = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return value
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+const extractTotalCost = async (snapshot: SnapshotListItem): Promise<number> => {
+  const simulationCost = toNumber(snapshot.simulation_result?.lcc_total_cost)
+  if (simulationCost > 0) {
+    return simulationCost
+  }
+
+  try {
+    const costRes = await getStaticCostLedger(snapshot.id)
+    return toNumber(costRes.data.total_cost)
+  } catch {
+    return 0
+  }
+}
+
+const buildSnapshotRow = async (snapshot: SnapshotListItem): Promise<Snapshot> => {
+  return {
+    id: snapshot.id,
+    snapshot_code: snapshot.snapshot_code,
+    snapshot_name: snapshot.snapshot_name,
+    scheme_name: `版本 #${snapshot.scheme_version_id}`,
+    total_cost: await extractTotalCost(snapshot),
+    status: normalizeStatus(snapshot.status),
+    created_at: snapshot.created_at,
+    simulation_result: snapshot.simulation_result ?? null,
+  }
+}
+
+const updateSnapshotRow = (snapshotId: number, patch: Partial<Snapshot>) => {
+  const index = snapshots.value.findIndex(item => item.id === snapshotId)
+  if (index === -1) {
+    return
+  }
+  snapshots.value[index] = {
+    ...snapshots.value[index],
+    ...patch,
+  }
+  syncStats()
+}
+
+const clearPolling = (snapshotId: number) => {
+  const timerId = pollingTimers.get(snapshotId)
+  if (timerId !== undefined) {
+    window.clearTimeout(timerId)
+    pollingTimers.delete(snapshotId)
+  }
+}
+
+const clearAllPolling = () => {
+  pollingTimers.forEach((timerId) => {
+    window.clearTimeout(timerId)
+  })
+  pollingTimers.clear()
+}
+
+const applySimulationStatus = (snapshotId: number, payload: SimulationStatusResponse) => {
+  const currentRow = snapshots.value.find(item => item.id === snapshotId)
+  if (!currentRow) {
+    return
+  }
+
+  const nextStatus = normalizeStatus(payload.status)
+  const simulationResult = payload.simulation_result ?? null
+  const patch: Partial<Snapshot> = {
+    simulation_result: simulationResult,
+  }
+
+  if (!(currentRow.status === 'SIMULATING' && nextStatus === 'READY')) {
+    patch.status = nextStatus
+  }
+
+  if (simulationResult?.lcc_total_cost !== undefined) {
+    patch.total_cost = toNumber(simulationResult.lcc_total_cost)
+  }
+
+  updateSnapshotRow(snapshotId, patch)
+}
+
+const pollSimulationStatus = async (snapshotId: number) => {
+  if (isDisposed) {
+    clearPolling(snapshotId)
+    return
+  }
+
+  try {
+    const { data } = await getSimulationStatus(snapshotId)
+    applySimulationStatus(snapshotId, data)
+
+    if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+      clearPolling(snapshotId)
+      if (data.status === 'FAILED') {
+        ElMessage.error(data.simulation_result?.error_message || `快照 ${snapshotId} 仿真失败`)
+      }
+      return
+    }
+  } catch (error) {
+    console.error('轮询仿真状态失败:', error)
+  }
+
+  if (!isDisposed) {
+    const timerId = window.setTimeout(() => {
+      void pollSimulationStatus(snapshotId)
+    }, 3000)
+    pollingTimers.set(snapshotId, timerId)
+  }
 }
 
 const loadSnapshots = async () => {
@@ -288,38 +452,16 @@ const loadSnapshots = async () => {
   
   try {
     const res = await modelSnapshotApi.list({ size: 100 })
-    allSnapshots.value = res.data.items || []
-    
-    const snapshotList: Snapshot[] = []
-    
-    for (const snapshot of allSnapshots.value) {
-      let totalCost = 0
-      try {
-        const costRes = await getStaticCostLedger(snapshot.id)
-        totalCost = costRes.data.total_cost || 0
-      } catch {
-        // 快照可能没有成本数据
-      }
-      
-      snapshotList.push({
-        id: snapshot.id,
-        snapshot_code: snapshot.snapshot_code,
-        snapshot_name: snapshot.snapshot_name,
-        scheme_name: `版本 #${snapshot.scheme_version_id}`,
-        total_cost: totalCost,
-        status: snapshot.status === 'READY' ? 'READY' : 
-                snapshot.status === 'DRAFT' ? 'READY' : 
-                snapshot.status as 'READY' | 'SIMULATING' | 'COMPLETED',
-        created_at: snapshot.created_at,
-      })
+    allSnapshots.value = (res.data.items || []) as SnapshotListItem[]
+
+    const snapshotList = await Promise.all(allSnapshots.value.map(snapshot => buildSnapshotRow(snapshot)))
+    if (isDisposed) {
+      return
     }
-    
+
     snapshots.value = snapshotList
     pagination.total = snapshotList.length
-    
-    stats.totalSnapshots = allSnapshots.value.length
-    stats.simulationsCompleted = allSnapshots.value.filter(s => s.status === 'COMPLETED').length
-    stats.costAlerts = 0
+    syncStats()
   } catch (error: any) {
     console.error('加载快照列表失败:', error)
     ElMessage.error(error.response?.data?.message || '加载快照列表失败')
@@ -344,6 +486,8 @@ const handleViewLedger = (row: Snapshot) => {
 }
 
 const handleStartSimulation = async (row: Snapshot) => {
+  const previousStatus = row.status
+
   try {
     await ElMessageBox.confirm(
       '确定要将此模型推入算力集群进行全生命周期仿真吗？该过程可能需要几分钟。',
@@ -354,27 +498,49 @@ const handleStartSimulation = async (row: Snapshot) => {
         type: 'warning',
       }
     )
-    
-    const index = snapshots.value.findIndex(item => item.id === row.id)
-    if (index !== -1) {
-      snapshots.value[index].status = 'SIMULATING'
-    }
-    
+
+    clearPolling(row.id)
+    updateSnapshotRow(row.id, {
+      status: 'SIMULATING',
+      simulation_result: {
+        status: 'SIMULATING',
+        snapshot_id: row.id,
+      },
+    })
+
+    await startLccSimulation(row.id)
+
     ElMessage.success({
       message: `快照 ${row.snapshot_code} 已成功投递至仿真队列`,
       duration: 3000,
     })
-  } catch {
-    // 用户取消
+
+    const timerId = window.setTimeout(() => {
+      void pollSimulationStatus(row.id)
+    }, 3000)
+    pollingTimers.set(row.id, timerId)
+  } catch (error) {
+    updateSnapshotRow(row.id, {
+      status: previousStatus,
+      simulation_result: row.simulation_result,
+    })
+    if (error !== 'cancel') {
+      console.error('启动仿真失败:', error)
+    }
   }
 }
 
 const handleViewReport = (row: Snapshot) => {
-  ElMessage.info(`查看LCC报告功能开发中：${row.snapshot_name}`)
+  router.push(`/costing/lcc-report/${row.id}`)
 }
 
 onMounted(() => {
-  loadSnapshots()
+  void loadSnapshots()
+})
+
+onUnmounted(() => {
+  isDisposed = true
+  clearAllPolling()
 })
 </script>
 
