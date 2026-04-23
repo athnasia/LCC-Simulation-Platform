@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { AxiosResponse } from 'axios'
+import type { Unit } from './masterData'
 
 // ═══════════════════════════════════════════════════════════════
 // 通用类型
@@ -192,6 +193,7 @@ export interface DesignSchemeVersionCreate {
   scheme_id: number
   version: number
   status?: string
+  clone_from_version_id?: number | null
   description?: string | null
 }
 
@@ -229,6 +231,8 @@ export interface BomNode {
   code: string
   node_type: string
   quantity: number | null
+  unit_id: number | null
+  unit: Pick<Unit, 'id' | 'name' | 'code' | 'symbol'> | null
   sort_order: number
   is_configured: boolean
   attributes: Record<string, any> | null
@@ -257,6 +261,7 @@ export interface BomNodeCreate {
   code: string
   node_type?: string
   quantity?: number | null
+  unit_id?: number | null
   sort_order?: number
   is_configured?: boolean
   attributes?: Record<string, any> | null
@@ -343,6 +348,9 @@ export interface RouteStepBind {
   route_id: number
   process_id: number
   step_order: number
+  process_type: 'IN_HOUSE' | 'OUTSOURCED'
+  override_equipment_id: number | null
+  outsource_price: number | null
   override_t_set: number | null
   override_t_run: number | null
   override_mat_params: Record<string, number> | null
@@ -371,13 +379,25 @@ export interface RouteStepBindCreate {
   route_id: number
   process_id: number
   step_order: number
+  process_type?: 'IN_HOUSE' | 'OUTSOURCED'
+  override_equipment_id?: number | null
+  outsource_price?: number | null
   override_t_set?: number | null
   override_t_run?: number | null
   override_mat_params?: Record<string, number> | null
   description?: string | null
 }
 
-export type RouteStepBindUpdate = Partial<Omit<RouteStepBindCreate, 'route_id' | 'process_id'>>
+export interface RouteStepBindUpdate {
+  step_order?: number
+  process_type?: 'IN_HOUSE' | 'OUTSOURCED'
+  override_equipment_id?: number | null
+  outsource_price?: number | null
+  override_t_set?: number | null
+  override_t_run?: number | null
+  override_mat_params?: Record<string, number> | null
+  description?: string | null
+}
 
 export const routeStepBindApi = {
   list: (params: RouteStepBindQuery): Promise<AxiosResponse<PageResult<RouteStepBind>>> =>

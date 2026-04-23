@@ -239,6 +239,12 @@ INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
 	 - 当前项目标准字符集应为 `utf8mb4`。
 	 - 若数据库中已存为 `????`，优先视为历史脏数据修复问题，而不是前端显示问题；不要只改页面编码掩盖数据层损坏。
 
+11. **Pydantic model_dump 必须使用 mode='json' 以支持 Decimal 序列化**
+	 - 数据库中的 `Decimal` 类型字段（如 `quantity`、`price`、`rate`）无法直接被 Python `json` 模块序列化。
+	 - 所有调用 `model_dump()` 的地方，如果数据需要存入 JSON 字段或返回给前端，必须使用 `model_dump(mode='json')`。
+	 - 这样 Pydantic 会自动将 `Decimal` 转换为 `float`，避免 `TypeError: Object of type Decimal is not JSON serializable` 错误。
+	 - **典型场景**：快照数据生成、API 响应序列化、JSON 字段存储。
+
 ---
 
 ## 8. 技术债务追踪 (Technical Debt Tracking)
@@ -282,3 +288,239 @@ INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
    - 所有技术债务必须记录在 `docs/TECH_DEBT.md`
    - 在 `AGENTS.md` 中记录相关文件位置
    - 处理完成后更新状态为"已解决"
+
+---
+
+## 9. 前端测试规范 (Frontend Testing Standards)
+
+本节定义前端代码的测试规范，确保代码质量和可维护性。
+
+### 9.1 测试技术栈
+
+| 工具 | 用途 | 版本要求 |
+|------|------|---------|
+| **Vitest** | 单元测试框架 | ^3.1.0 |
+| **@vue/test-utils** | Vue 组件测试工具 | ^2.4.0 |
+| **jsdom** | DOM 环境模拟 | ^26.0.0 |
+| **happy-dom** | 轻量级 DOM 环境（可选） | ^15.0.0 |
+
+### 9.2 测试文件命名与位置
+
+```
+frontend/src/
+├── utils/
+│   ├── validation.ts        # 源文件
+│   ├── validation.test.ts   # 测试文件（同目录）
+│   ├── error.ts
+│   └── error.test.ts
+├── components/
+│   └── base/
+│       ├── BaseTable.vue
+│       └── BaseTable.test.ts
+└── stores/
+    ├── engineering.ts
+    └── engineering.test.ts
+```
+
+**命名规则**：
+- 测试文件必须与源文件同名，后缀为 `.test.ts` 或 `.spec.ts`
+- 测试文件必须放在源文件同目录下
+- 组件测试文件后缀为 `.test.ts`（不是 `.vue.test.ts`）
+
+### 9.3 测试分类与覆盖要求
+
+#### 9.3.1 单元测试（必须）
+
+**工具函数测试**：所有 `src/utils/` 下的工具函数必须有单元测试
+
+```typescript
+// validation.test.ts
+import { describe, it, expect } from 'vitest'
+import { requiredRule, emailRule } from './validation'
+
+describe('validation rules', () => {
+  it('should create a required rule with message', () => {
+    const rule = requiredRule('请输入用户名')
+    expect(rule.required).toBe(true)
+    expect(rule.message).toBe('请输入用户名')
+  })
+})
+```
+
+**Store 测试**：Pinia Store 的核心逻辑必须有测试
+
+```typescript
+// engineering.test.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
+import { useEngineeringStore } from './engineering'
+
+describe('Engineering Store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('should initialize with empty state', () => {
+    const store = useEngineeringStore()
+    expect(store.projects).toEqual([])
+  })
+})
+```
+
+#### 9.3.2 组件测试（推荐）
+
+**基础组件测试**：`src/components/base/` 下的基础组件必须有测试
+
+```typescript
+// BaseTable.test.ts
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import BaseTable from './BaseTable.vue'
+
+describe('BaseTable', () => {
+  it('should render table with data', () => {
+    const wrapper = mount(BaseTable, {
+      props: {
+        data: [{ id: 1, name: 'Test' }],
+        columns: [{ prop: 'name', label: '名称' }],
+      },
+    })
+    expect(wrapper.find('table').exists()).toBe(true)
+  })
+})
+```
+
+### 9.4 测试覆盖率要求
+
+| 类型 | 最低覆盖率 | 目标覆盖率 |
+|------|-----------|-----------|
+| 工具函数 | 80% | 95% |
+| Store | 70% | 85% |
+| 基础组件 | 60% | 80% |
+| 业务组件 | 40% | 60% |
+
+### 9.5 Mock 规范
+
+#### 9.5.1 Element Plus Mock
+
+```typescript
+// src/test/setup.ts
+import { vi } from 'vitest'
+
+vi.mock('element-plus', () => ({
+  ElMessage: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+  ElNotification: vi.fn(),
+  ElMessageBox: {
+    confirm: vi.fn(),
+    alert: vi.fn(),
+    prompt: vi.fn(),
+  },
+}))
+```
+
+#### 9.5.2 API Mock
+
+```typescript
+// 使用 vi.fn() mock API 调用
+const mockApi = {
+  list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  create: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+}
+```
+
+### 9.6 测试命令
+
+```bash
+# 运行所有测试
+pnpm test:run
+
+# 运行测试并生成覆盖率报告
+pnpm test:coverage
+
+# 启动测试 UI 界面
+pnpm test:ui
+
+# 监听模式运行测试
+pnpm test
+```
+
+### 9.7 测试编写原则
+
+1. **AAA 模式**：Arrange（准备）、Act（执行）、Assert（断言）
+2. **单一职责**：每个测试用例只验证一个行为
+3. **独立性**：测试之间不应有依赖关系
+4. **可读性**：测试描述应清晰表达测试意图
+5. **快速执行**：避免不必要的等待和异步操作
+
+### 9.8 禁止事项
+
+1. **禁止跳过测试**：不允许使用 `it.skip()` 或 `describe.skip()`
+2. **禁止硬编码等待**：不允许使用 `setTimeout` 等待异步操作
+3. **禁止测试私有方法**：只测试公开的 API 和行为
+4. **禁止依赖外部服务**：所有外部依赖必须 Mock
+
+### 9.9 持续集成
+
+在 CI/CD 流程中，测试必须通过才能合并代码：
+
+```yaml
+# .github/workflows/test.yml
+- name: Run tests
+  run: pnpm test:run
+  
+- name: Check coverage
+  run: pnpm test:coverage
+```
+
+### 9.10 测试文件模板
+
+#### 工具函数测试模板
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { functionName } from './module'
+
+describe('module name', () => {
+  describe('functionName', () => {
+    it('should return expected value for valid input', () => {
+      expect(functionName('input')).toBe('expected')
+    })
+
+    it('should handle edge case', () => {
+      expect(functionName('')).toBe('')
+    })
+
+    it('should throw error for invalid input', () => {
+      expect(() => functionName(null)).toThrow()
+    })
+  })
+})
+```
+
+#### 组件测试模板
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import ComponentName from './ComponentName.vue'
+
+describe('ComponentName', () => {
+  it('should render correctly', () => {
+    const wrapper = mount(ComponentName, {
+      props: { /* props */ },
+    })
+    expect(wrapper.html()).toContain('expected content')
+  })
+
+  it('should emit event on click', async () => {
+    const wrapper = mount(ComponentName)
+    await wrapper.find('button').trigger('click')
+    expect(wrapper.emitted('click')).toBeTruthy()
+  })
+})
+```

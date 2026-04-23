@@ -1,20 +1,16 @@
 <template>
   <div class="route-step-form-panel">
-    <!-- 面板标题 -->
     <div class="panel-header">
       <h3>资源参数覆写</h3>
     </div>
     
-    <!-- 内容区域 -->
     <div class="panel-body">
-      <!-- 空状态：未选中工序 -->
       <el-empty 
         v-if="!selectedStep"
         description="请在中栏选择一个工序步骤"
         :image-size="120"
       />
       
-      <!-- 表单 -->
       <el-form 
         v-else
         ref="formRef"
@@ -23,7 +19,6 @@
         label-position="right"
         v-loading="loading"
       >
-        <!-- 基础信息（只读） -->
         <el-divider content-position="left">
           <el-text type="info">基础信息（只读）</el-text>
         </el-divider>
@@ -36,40 +31,99 @@
           <el-input :value="selectedStep.process?.code || '-'" disabled />
         </el-form-item>
         
-        <!-- 工时覆写 -->
         <el-divider content-position="left">
-          <el-text type="info">工时覆写</el-text>
+          <el-text type="info">加工设置</el-text>
         </el-divider>
         
-        <el-form-item label="准备工时">
-          <el-input-number
-            v-model="form.override_t_set"
-            :min="0"
-            :precision="4"
-            :step="0.1"
-            placeholder="请输入准备工时"
-            style="width: 100%"
-          />
-          <el-text v-if="selectedStep.process?.setup_time" size="small" type="info">
-            标准值: {{ selectedStep.process.setup_time }} h
-          </el-text>
+        <el-form-item label="加工方式">
+          <el-radio-group v-model="form.process_type" @change="handleProcessTypeChange">
+            <el-radio value="IN_HOUSE">
+              <el-icon><OfficeBuilding /></el-icon>
+              厂内自制
+            </el-radio>
+            <el-radio value="OUTSOURCED">
+              <el-icon><Van /></el-icon>
+              委外加工
+            </el-radio>
+          </el-radio-group>
         </el-form-item>
         
-        <el-form-item label="运行工时">
-          <el-input-number
-            v-model="form.override_t_run"
-            :min="0"
-            :precision="4"
-            :step="0.1"
-            placeholder="请输入运行工时"
-            style="width: 100%"
-          />
-          <el-text v-if="selectedStep.process?.standard_time" size="small" type="info">
-            标准值: {{ selectedStep.process.standard_time }} h
-          </el-text>
-        </el-form-item>
+        <template v-if="form.process_type === 'IN_HOUSE'">
+          <el-form-item label="覆写设备">
+            <el-select
+              v-model="form.override_equipment_id"
+              placeholder="留空则使用标准默认设备"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="equipment in equipmentOptions"
+                :key="equipment.id"
+                :label="equipment.name"
+                :value="equipment.id"
+              >
+                <div class="equipment-option">
+                  <span>{{ equipment.name }}</span>
+                  <el-tag size="small" type="info">{{ equipment.code }}</el-tag>
+                </div>
+              </el-option>
+            </el-select>
+          </el-form-item>
+          
+          <el-divider content-position="left">
+            <el-text type="info">工时覆写</el-text>
+          </el-divider>
+          
+          <el-form-item label="准备工时">
+            <el-input-number
+              v-model="form.override_t_set"
+              :min="0"
+              :precision="4"
+              :step="0.1"
+              placeholder="请输入准备工时"
+              style="width: 100%"
+            />
+            <el-text v-if="selectedStep.process?.setup_time" size="small" type="info">
+              标准值: {{ selectedStep.process.setup_time }} h
+            </el-text>
+          </el-form-item>
+          
+          <el-form-item label="运行工时">
+            <el-input-number
+              v-model="form.override_t_run"
+              :min="0"
+              :precision="4"
+              :step="0.1"
+              placeholder="请输入运行工时"
+              style="width: 100%"
+            />
+            <el-text v-if="selectedStep.process?.standard_time" size="small" type="info">
+              标准值: {{ selectedStep.process.standard_time }} h
+            </el-text>
+          </el-form-item>
+        </template>
         
-        <!-- 辅材消耗覆写 -->
+        <template v-else-if="form.process_type === 'OUTSOURCED'">
+          <el-divider content-position="left">
+            <el-text type="info">外协价格</el-text>
+          </el-divider>
+          
+          <el-form-item label="外协单价">
+            <el-input-number
+              v-model="form.outsource_price"
+              :min="0"
+              :precision="2"
+              :step="10"
+              placeholder="请输入外协单价"
+              style="width: 100%"
+            />
+            <el-text size="small" type="info">
+              单位：元/件
+            </el-text>
+          </el-form-item>
+        </template>
+        
         <el-divider content-position="left">
           <el-text type="info">辅材消耗覆写</el-text>
         </el-divider>
@@ -104,7 +158,6 @@
           />
         </div>
         
-        <!-- 描述 -->
         <el-divider content-position="left">
           <el-text type="info">备注</el-text>
         </el-divider>
@@ -120,7 +173,6 @@
           />
         </el-form-item>
         
-        <!-- 保存按钮 -->
         <el-form-item>
           <el-button 
             type="primary" 
@@ -138,6 +190,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { OfficeBuilding, Van } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
 import type { RouteStepBindWithProcess } from '@/api/engineering'
@@ -149,37 +202,50 @@ interface MaterialItem {
   unit?: string
 }
 
+interface EquipmentOption {
+  id: number
+  code: string
+  name: string
+}
+
 const store = useEngineeringStore()
 
-// 从 Store 获取状态
 const selectedStep = computed(() => store.selectedStep)
 
-// 表单引用
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const saving = ref(false)
 
-// 表单数据
 const form = ref({
+  process_type: 'IN_HOUSE' as 'IN_HOUSE' | 'OUTSOURCED',
+  override_equipment_id: null as number | null,
+  outsource_price: null as number | null,
   override_t_set: null as number | null,
   override_t_run: null as number | null,
   description: '',
 })
 
-// 材料列表
 const materialList = ref<MaterialItem[]>([])
 
-// 监听选中的工序步骤变化
+const equipmentOptions = ref<EquipmentOption[]>([
+  { id: 1, code: 'EQ_CNC_001', name: '数控车床 A' },
+  { id: 2, code: 'EQ_CNC_002', name: '数控车床 B' },
+  { id: 3, code: 'EQ_MILL_001', name: '立式铣床' },
+  { id: 4, code: 'EQ_DRILL_001', name: '摇臂钻床' },
+  { id: 5, code: 'EQ_GRIND_001', name: '平面磨床' },
+])
+
 watch(selectedStep, (newStep) => {
   if (newStep) {
-    // 填充表单数据
     form.value = {
+      process_type: newStep.process_type || 'IN_HOUSE',
+      override_equipment_id: newStep.override_equipment_id,
+      outsource_price: newStep.outsource_price,
       override_t_set: newStep.override_t_set,
       override_t_run: newStep.override_t_run,
       description: newStep.description || '',
     }
     
-    // 解析材料参数
     if (newStep.override_mat_params) {
       materialList.value = Object.entries(newStep.override_mat_params).map(([code, quantity]) => ({
         code,
@@ -188,12 +254,13 @@ watch(selectedStep, (newStep) => {
         unit: getMaterialUnit(code),
       }))
     } else {
-      // 从标准工艺中获取材料清单（这里需要根据实际业务逻辑调整）
       loadStandardMaterials(newStep)
     }
   } else {
-    // 清空表单
     form.value = {
+      process_type: 'IN_HOUSE',
+      override_equipment_id: null,
+      outsource_price: null,
       override_t_set: null,
       override_t_run: null,
       description: '',
@@ -202,7 +269,16 @@ watch(selectedStep, (newStep) => {
   }
 }, { immediate: true })
 
-// 获取材料名称（模拟数据）
+function handleProcessTypeChange() {
+  if (form.value.process_type === 'IN_HOUSE') {
+    form.value.outsource_price = null
+  } else {
+    form.value.override_equipment_id = null
+    form.value.override_t_set = null
+    form.value.override_t_run = null
+  }
+}
+
 function getMaterialName(code: string): string {
   const materialNames: Record<string, string> = {
     'MAT_CUTTING_FLUID': '切削液',
@@ -213,7 +289,6 @@ function getMaterialName(code: string): string {
   return materialNames[code] || code
 }
 
-// 获取材料单位（模拟数据）
 function getMaterialUnit(code: string): string {
   const materialUnits: Record<string, string> = {
     'MAT_CUTTING_FLUID': 'L',
@@ -224,12 +299,9 @@ function getMaterialUnit(code: string): string {
   return materialUnits[code] || '件'
 }
 
-// 加载标准材料清单（模拟数据）
 async function loadStandardMaterials(step: RouteStepBindWithProcess) {
   loading.value = true
   try {
-    // 这里应该从后端获取标准工艺的材料清单
-    // 暂时使用模拟数据
     await new Promise(resolve => setTimeout(resolve, 300))
     
     materialList.value = [
@@ -243,7 +315,6 @@ async function loadStandardMaterials(step: RouteStepBindWithProcess) {
   }
 }
 
-// 组装材料参数 JSON
 function buildMaterialParams(): Record<string, number> | null {
   const validMaterials = materialList.value.filter(m => m.quantity !== null && m.quantity > 0)
   
@@ -259,7 +330,6 @@ function buildMaterialParams(): Record<string, number> | null {
   return result
 }
 
-// 保存参数
 async function handleSave() {
   if (!selectedStep.value) {
     ElMessage.warning('请先选择工序步骤')
@@ -271,6 +341,9 @@ async function handleSave() {
     const materialParams = buildMaterialParams()
     
     await store.updateRouteStep(selectedStep.value.id, {
+      process_type: form.value.process_type,
+      override_equipment_id: form.value.override_equipment_id,
+      outsource_price: form.value.outsource_price,
       override_t_set: form.value.override_t_set,
       override_t_run: form.value.override_t_run,
       override_mat_params: materialParams,
@@ -353,6 +426,13 @@ async function handleSave() {
   font-size: 14px;
 }
 
+.equipment-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
 :deep(.el-divider__text) {
   background-color: #fff;
   padding: 0 10px;
@@ -365,5 +445,16 @@ async function handleSave() {
 :deep(.el-text) {
   display: block;
   margin-top: 4px;
+}
+
+:deep(.el-radio-group) {
+  display: flex;
+  gap: 16px;
+}
+
+:deep(.el-radio) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

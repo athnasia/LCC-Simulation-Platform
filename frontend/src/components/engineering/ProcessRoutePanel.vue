@@ -3,33 +3,86 @@
     <!-- 面板标题 -->
     <div class="panel-header">
       <h3>工艺路线编排</h3>
-      <el-button 
-        type="primary" 
-        size="small"
-        :disabled="!canAddProcess"
-        @click="handleAddProcess"
-      >
-        + 添加标准工序
-      </el-button>
+      <div class="header-actions">
+        <template v-if="processRoutes.length > 0">
+          <el-button 
+            type="primary" 
+            size="small"
+            :disabled="!canCreateRoute"
+            @click="handleCreateRoute"
+          >
+            新建工艺路线
+          </el-button>
+          <el-button 
+            type="success" 
+            size="small"
+            :disabled="!canAddProcess"
+            @click="handleAddProcess"
+          >
+            + 添加标准工序
+          </el-button>
+        </template>
+      </div>
     </div>
     
-    <!-- 内容区域 -->
+    <div v-if="hasSelectedBomNode && selectedBomNode?.node_type === 'PART' && processRoutes.length > 0" class="route-selector">
+      <el-select
+        v-model="selectedRouteId"
+        placeholder="选择工艺路线"
+        style="width: 100%"
+        @change="handleRouteChange"
+      >
+        <el-option
+          v-for="route in processRoutes"
+          :key="route.id"
+          :label="route.route_name"
+          :value="route.id"
+        >
+          <div class="route-option">
+            <span>{{ route.route_name }}</span>
+            <el-tag size="small" type="info">{{ route.route_code }}</el-tag>
+          </div>
+        </el-option>
+      </el-select>
+    </div>
+    
     <div class="panel-body">
-      <!-- 空状态：未选中节点 -->
       <el-empty 
         v-if="!hasSelectedBomNode"
         description="请先在左侧选择一个零件节点"
         :image-size="120"
       />
       
-      <!-- 空状态：选中的是装配节点 -->
       <el-empty 
         v-else-if="selectedBomNode?.node_type === 'ASSEMBLY'"
         description="装配节点无法配置工艺路线，请选择叶子零件节点"
         :image-size="120"
       />
       
-      <!-- 工序列表 -->
+      <el-empty 
+        v-else-if="!routesLoading && processRoutes.length === 0"
+        :image-size="120"
+      >
+        <template #description>
+          <p class="empty-description">该零件尚未配置工艺路线</p>
+          <p class="empty-hint">点击下方按钮，快速添加首道工序</p>
+        </template>
+        <el-button 
+          type="primary" 
+          size="large"
+          :icon="Plus"
+          @click="handleAddFirstProcess"
+        >
+          + 添加首道标准工序
+        </el-button>
+      </el-empty>
+      
+      <el-empty 
+        v-else-if="!selectedRouteId"
+        description="请选择一条工艺路线"
+        :image-size="120"
+      />
+      
       <div v-else class="process-list">
         <el-table
           v-loading="routesLoading || stepsLoading"
@@ -95,7 +148,6 @@
           </el-table-column>
         </el-table>
         
-        <!-- 空状态：无工序 -->
         <el-empty 
           v-if="!routesLoading && !stepsLoading && routeSteps.length === 0"
           description="暂无工序，请点击上方按钮添加标准工序"
@@ -104,55 +156,196 @@
       </div>
     </div>
     
-    <!-- 标准工艺选择器弹窗 -->
     <ProcessSelectorDialog 
       v-model="selectorVisible"
       @select="handleProcessSelect"
     />
+    
+    <el-dialog
+      v-model="createRouteVisible"
+      title="新建工艺路线"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form
+        ref="routeFormRef"
+        :model="routeForm"
+        :rules="routeRules"
+        label-width="100px"
+      >
+        <el-form-item label="路线名称" prop="route_name">
+          <el-input 
+            v-model="routeForm.route_name" 
+            placeholder="请输入路线名称"
+            maxlength="100"
+          />
+        </el-form-item>
+        
+        <el-form-item label="路线编码" prop="route_code">
+          <el-input 
+            v-model="routeForm.route_code" 
+            placeholder="请输入路线编码"
+            maxlength="50"
+          />
+        </el-form-item>
+        
+        <el-form-item label="描述" prop="description">
+          <el-input 
+            v-model="routeForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入描述"
+            maxlength="512"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="createRouteVisible = false">取消</el-button>
+        <el-button type="primary" :loading="createRouteLoading" @click="handleCreateRouteSubmit">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
-import type { RouteStepBindWithProcess } from '@/api/engineering'
+import type { RouteStepBindWithProcess, ComponentProcessRoute } from '@/api/engineering'
 import ProcessSelectorDialog from './ProcessSelectorDialog.vue'
 
 const store = useEngineeringStore()
 
-// 从 Store 获取状态
 const hasSelectedBomNode = computed(() => store.hasSelectedBomNode)
 const selectedBomNode = computed(() => store.selectedBomNode)
+const processRoutes = computed(() => store.processRoutes)
 const routeSteps = computed(() => store.routeSteps)
 const routesLoading = computed(() => store.routesLoading)
 const stepsLoading = computed(() => store.stepsLoading)
+const selectedRoute = computed(() => store.selectedRoute)
 
-// 是否可以添加工序
-const canAddProcess = computed(() => {
+const selectedRouteId = ref<number | null>(null)
+const isFirstProcess = ref(false)
+
+const canCreateRoute = computed(() => {
   return hasSelectedBomNode.value && selectedBomNode.value?.node_type === 'PART'
 })
 
-// 标准工艺选择器弹窗
+const canAddProcess = computed(() => {
+  return canCreateRoute.value && selectedRouteId.value !== null
+})
+
+watch(selectedRoute, (newRoute) => {
+  selectedRouteId.value = newRoute?.id ?? null
+})
+
+watch(processRoutes, (routes) => {
+  if (routes.length > 0 && !selectedRouteId.value) {
+    selectedRouteId.value = routes[0].id
+    const route = routes.find(r => r.id === selectedRouteId.value)
+    if (route) {
+      store.selectRoute(route)
+    }
+  }
+})
+
+function handleRouteChange(routeId: number) {
+  const route = processRoutes.value.find(r => r.id === routeId)
+  if (route) {
+    store.selectRoute(route)
+  }
+}
+
 const selectorVisible = ref(false)
 
-// 当前行变化
+const createRouteVisible = ref(false)
+const createRouteLoading = ref(false)
+const routeFormRef = ref<FormInstance>()
+const routeForm = ref({
+  route_name: '',
+  route_code: '',
+  description: '',
+})
+
+const routeRules: FormRules = {
+  route_name: [
+    { required: true, message: '请输入路线名称', trigger: 'blur' },
+    { min: 1, max: 100, message: '长度在 1 到 100 个字符', trigger: 'blur' },
+  ],
+  route_code: [
+    { required: true, message: '请输入路线编码', trigger: 'blur' },
+    { min: 1, max: 50, message: '长度在 1 到 50 个字符', trigger: 'blur' },
+    { pattern: /^[A-Za-z0-9_-]+$/, message: '只能包含字母、数字、下划线和横杠', trigger: 'blur' },
+  ],
+}
+
 function handleCurrentChange(currentRow: RouteStepBindWithProcess | null) {
   store.selectStep(currentRow)
 }
 
-// 添加标准工序
 function handleAddProcess() {
+  isFirstProcess.value = false
   selectorVisible.value = true
 }
 
-// 选择标准工艺后的回调
-async function handleProcessSelect(processId: number) {
-  await store.addRouteStep(processId)
-  selectorVisible.value = false
+function handleAddFirstProcess() {
+  isFirstProcess.value = true
+  selectorVisible.value = true
 }
 
-// 上移工序
+async function handleProcessSelect(processId: number) {
+  try {
+    if (isFirstProcess.value) {
+      await store.addFirstProcessWithDefaultRoute(processId)
+    } else {
+      await store.addRouteStep(processId)
+    }
+    selectorVisible.value = false
+    isFirstProcess.value = false
+  } catch (error) {
+    console.error('Process select failed:', error)
+  }
+}
+
+function handleCreateRoute() {
+  routeForm.value = {
+    route_name: '',
+    route_code: '',
+    description: '',
+  }
+  createRouteVisible.value = true
+}
+
+async function handleCreateRouteSubmit() {
+  if (!routeFormRef.value) return
+  
+  try {
+    await routeFormRef.value.validate()
+    
+    createRouteLoading.value = true
+    
+    const result = await store.createProcessRoute({
+      route_name: routeForm.value.route_name,
+      route_code: routeForm.value.route_code,
+      description: routeForm.value.description || null,
+    })
+    
+    if (result) {
+      createRouteVisible.value = false
+      selectedRouteId.value = result.id
+    }
+  } catch (error) {
+    console.error('Create route failed:', error)
+  } finally {
+    createRouteLoading.value = false
+  }
+}
+
 async function handleMoveUp(index: number) {
   if (index === 0) return
   
@@ -165,7 +358,6 @@ async function handleMoveUp(index: number) {
   await store.reorderRouteSteps(stepIds)
 }
 
-// 下移工序
 async function handleMoveDown(index: number) {
   if (index === routeSteps.value.length - 1) return
   
@@ -178,7 +370,6 @@ async function handleMoveDown(index: number) {
   await store.reorderRouteSteps(stepIds)
 }
 
-// 删除工序
 async function handleDelete(row: RouteStepBindWithProcess) {
   try {
     await ElMessageBox.confirm(
@@ -223,6 +414,24 @@ async function handleDelete(row: RouteStepBindWithProcess) {
   color: #303133;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.route-selector {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+  background-color: #fafafa;
+}
+
+.route-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
 .panel-body {
   flex: 1;
   overflow: auto;
@@ -237,6 +446,18 @@ async function handleDelete(row: RouteStepBindWithProcess) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.empty-description {
+  font-size: 14px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-bottom: 16px;
 }
 
 :deep(.el-table__body tr.current-row > td) {

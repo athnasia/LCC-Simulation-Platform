@@ -28,7 +28,7 @@ def get_db() -> Generator[Session, None, None]:
       1. 路由函数执行前：从连接池取出连接，开启 Session
       2. 路由函数执行中：通过 yield 将 Session 注入
       3. 路由函数执行后（含异常）：
-         - 正常：commit 提交当前事务
+         - 正常：由 Router 层负责 commit（符合 AGENTS.md 规范）
          - 异常：rollback 回滚，再向上抛出，由全局 exception_handler 处理
          - finally：无论如何关闭 Session，归还连接到池
 
@@ -36,11 +36,15 @@ def get_db() -> Generator[Session, None, None]:
         @router.get("/")
         def list_items(db: Session = Depends(get_db)):
             ...
+
+        @router.post("/")
+        def create_item(db: Session = Depends(get_db)):
+            ...
+            db.commit()  # Router 层负责提交
     """
     db = SessionLocal()
     try:
         yield db
-        db.commit()
     except Exception:
         db.rollback()
         raise

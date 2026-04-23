@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,12 +27,12 @@ class PageResult(BaseModel, Generic[T]):
         pages   — 总页数（由 total 与 size 计算得出）
     """
     items: list[T]
-    total: int = Field(description="总记录数")
-    page: int = Field(description="当前页码")
-    size: int = Field(description="每页条数")
-    pages: int = Field(description="总页数")
+    total: int = 0
+    page: int = 1
+    size: int = 20
+    pages: Optional[int] = 1
 
     @classmethod
     def build(cls, *, items: list[T], total: int, page: int, size: int) -> "PageResult[T]":
-        pages = max(1, (total + size - 1) // size) if total > 0 else 1
-        return cls(items=items, total=total, page=page, size=size, pages=pages)
+        total_pages = max(1, (total + size - 1) // size) if total > 0 else 1
+        return cls(items=items, total=total, page=page, size=size, pages=total_pages)

@@ -404,8 +404,7 @@ class RoleService:
                 raise BusinessRuleViolationError(message=f"角色编码「{code}」已存在")
 
     def _bind_permissions(self, role: SysRole, permission_ids: list[int], operator: str) -> None:
-        """全量替换角色权限（先清后写）。"""
-        # 删除旧绑定
+        """全量替换角色权限（先清后写，优化版：避免 N+1 查询）。"""
         old_bindings = self.db.execute(
             select(SysRolePermission).where(SysRolePermission.role_id == role.id)
         ).scalars().all()
@@ -413,22 +412,36 @@ class RoleService:
             self.db.delete(b)
         self.db.flush()
 
-        # 校验所有权限 ID 存在
-        for perm_id in set(permission_ids):
-            perm = self.db.execute(
-                select(SysPermission).where(
-                    SysPermission.id == perm_id,
-                    SysPermission.is_deleted == False,
-                )
-            ).scalar_one_or_none()
-            if perm is None:
-                raise ResourceNotFoundError(resource="权限", identifier=perm_id)
-            self.db.add(SysRolePermission(
+        if not permission_ids:
+            return
+
+        unique_perm_ids = list(set(permission_ids))
+        
+        existing_perms = self.db.execute(
+            select(SysPermission.id).where(
+                SysPermission.id.in_(unique_perm_ids),
+                SysPermission.is_deleted == False,
+            )
+        ).scalars().all()
+        
+        existing_ids = set(existing_perms)
+        missing_ids = set(unique_perm_ids) - existing_ids
+        if missing_ids:
+            raise ResourceNotFoundError(
+                resource="权限",
+                identifier=", ".join(map(str, missing_ids)),
+            )
+        
+        new_bindings = [
+            SysRolePermission(
                 role_id=role.id,
                 permission_id=perm_id,
                 created_by=operator,
                 updated_by=operator,
-            ))
+            )
+            for perm_id in unique_perm_ids
+        ]
+        self.db.add_all(new_bindings)
         self.db.flush()
 
     def list(
@@ -584,7 +597,7 @@ class UserService:
             raise BusinessRuleViolationError(message=f"邮箱「{email}」已被其他账号占用")
 
     def _bind_roles(self, user: SysUser, role_ids: list[int], operator: str) -> None:
-        """全量替换用户角色（先清后写）。"""
+        """全量替换用户角色（先清后写，优化版：避免 N+1 查询）。"""
         old_bindings = self.db.execute(
             select(SysUserRole).where(SysUserRole.user_id == user.id)
         ).scalars().all()
@@ -592,22 +605,36 @@ class UserService:
             self.db.delete(b)
         self.db.flush()
 
-        seen: set[int] = set()
-        for role_id in role_ids:
-            if role_id in seen:
-                continue
-            seen.add(role_id)
-            role = self.db.execute(
-                select(SysRole).where(SysRole.id == role_id, SysRole.is_deleted == False)
-            ).scalar_one_or_none()
-            if role is None:
-                raise ResourceNotFoundError(resource="角色", identifier=role_id)
-            self.db.add(SysUserRole(
+        if not role_ids:
+            return
+
+        unique_role_ids = list(set(role_ids))
+
+        existing_roles = self.db.execute(
+            select(SysRole.id).where(
+                SysRole.id.in_(unique_role_ids),
+                SysRole.is_deleted == False,
+            )
+        ).scalars().all()
+
+        existing_ids = set(existing_roles)
+        missing_ids = set(unique_role_ids) - existing_ids
+        if missing_ids:
+            raise ResourceNotFoundError(
+                resource="角色",
+                identifier=", ".join(map(str, missing_ids)),
+            )
+
+        new_bindings = [
+            SysUserRole(
                 user_id=user.id,
                 role_id=role_id,
                 created_by=operator,
                 updated_by=operator,
-            ))
+            )
+            for role_id in unique_role_ids
+        ]
+        self.db.add_all(new_bindings)
         self.db.flush()
 
     def list(

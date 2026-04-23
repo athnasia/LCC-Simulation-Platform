@@ -50,6 +50,24 @@
         />
       </el-form-item>
       
+      <el-form-item label="单位" prop="unit_id">
+        <el-select 
+          v-model="form.unit_id"
+          placeholder="请选择单位"
+          filterable
+          clearable
+          :loading="unitsLoading"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="unit in unitOptions"
+            :key="unit.id"
+            :label="`${unit.name} (${unit.symbol || unit.code})`"
+            :value="unit.id"
+          />
+        </el-select>
+      </el-form-item>
+      
       <el-form-item label="描述" prop="description">
         <el-input 
           v-model="form.description"
@@ -74,8 +92,9 @@
         >
           <el-input 
             v-model="attr.key"
-            placeholder="属性名（如：length）"
+            placeholder="属性名（纯英文，如：length）"
             style="width: 180px"
+            @blur="validateAttributeKey(index)"
           />
           <span class="separator">:</span>
           <el-input 
@@ -112,11 +131,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
+import { unitApi } from '@/api/masterData'
 import type { BomNode } from '@/api/engineering'
+import type { Unit } from '@/api/masterData'
 
 interface Props {
   modelValue: boolean
@@ -138,7 +159,9 @@ const emit = defineEmits<{
 
 const store = useEngineeringStore()
 
-// 弹窗可见性
+const unitOptions = ref<Unit[]>([])
+const unitsLoading = ref(false)
+
 const visible = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
@@ -159,6 +182,7 @@ const form = ref({
   code: '',
   node_type: 'PART',
   quantity: null as number | null,
+  unit_id: null as number | null,
   description: '',
 })
 
@@ -184,17 +208,18 @@ const rules: FormRules = {
 // 监听弹窗打开
 watch(visible, (newVal) => {
   if (newVal) {
+    loadUnits()
+    
     if (props.mode === 'edit' && props.data) {
-      // 编辑模式：填充数据
       form.value = {
         node_name: props.data.node_name,
         code: props.data.code,
         node_type: props.data.node_type,
         quantity: props.data.quantity,
+        unit_id: props.data.unit_id,
         description: props.data.description || '',
       }
       
-      // 填充动态属性
       if (props.data.attributes) {
         dynamicAttributes.value = Object.entries(props.data.attributes).map(([key, value]) => ({
           key,
@@ -204,12 +229,12 @@ watch(visible, (newVal) => {
         dynamicAttributes.value = []
       }
     } else {
-      // 新增模式：重置表单
       form.value = {
         node_name: '',
         code: '',
         node_type: 'PART',
         quantity: null,
+        unit_id: null,
         description: '',
       }
       dynamicAttributes.value = []
@@ -217,7 +242,29 @@ watch(visible, (newVal) => {
   }
 })
 
-// 添加动态属性
+async function loadUnits() {
+  unitsLoading.value = true
+  try {
+    const res = await unitApi.list({ size: 500, is_active: true })
+    unitOptions.value = res.data.items || []
+  } catch (error) {
+    console.error('Failed to load units:', error)
+    ElMessage.error('加载单位列表失败')
+  } finally {
+    unitsLoading.value = false
+  }
+}
+
+const VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+
+function validateAttributeKey(index: number) {
+  const attr = dynamicAttributes.value[index]
+  if (attr.key && !VARIABLE_NAME_PATTERN.test(attr.key)) {
+    ElMessage.warning('属性名必须为纯英文变量标识码（字母开头，可包含数字和下划线）')
+    attr.key = attr.key.replace(/[^a-zA-Z0-9_]/g, '').replace(/^[0-9]+/, '')
+  }
+}
+
 function addAttribute() {
   dynamicAttributes.value.push({
     key: '',
@@ -255,35 +302,44 @@ async function handleSubmit() {
   try {
     await formRef.value.validate()
     
+    const hasInvalidKey = dynamicAttributes.value.some(
+      attr => attr.key.trim() !== '' && !VARIABLE_NAME_PATTERN.test(attr.key)
+    )
+    if (hasInvalidKey) {
+      ElMessage.error('动态属性名必须为纯英文变量标识码（字母开头，可包含数字和下划线）')
+      return
+    }
+    
     submitting.value = true
     
     const attributes = buildAttributesJson()
     
     if (props.mode === 'create') {
-      // 新增模式
       await store.createBomNode({
         node_name: form.value.node_name,
         code: form.value.code,
         node_type: form.value.node_type,
         quantity: form.value.quantity,
+        unit_id: form.value.unit_id,
         description: form.value.description || null,
         attributes: attributes,
         parent_id: props.parentId,
       })
     } else if (props.data) {
-      // 编辑模式
       await store.updateBomNode(props.data.id, {
         node_name: form.value.node_name,
         node_type: form.value.node_type,
         quantity: form.value.quantity,
+        unit_id: form.value.unit_id,
         description: form.value.description || null,
         attributes: attributes,
       })
     }
     
     emit('success')
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit failed:', error)
+    ElMessage.error(error.response?.data?.detail || '操作失败，请稍后重试')
   } finally {
     submitting.value = false
   }
@@ -293,6 +349,14 @@ async function handleSubmit() {
 function handleClose() {
   visible.value = false
   formRef.value?.resetFields()
+  form.value = {
+    node_name: '',
+    code: '',
+    node_type: 'PART',
+    quantity: null,
+    unit_id: null,
+    description: '',
+  }
   dynamicAttributes.value = []
 }
 </script>

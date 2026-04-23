@@ -31,6 +31,11 @@ export const useEngineeringStore = defineStore('engineering', () => {
   // 状态定义
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  // 列表数据
+  const projects = ref<Project[]>([])
+  const products = ref<Product[]>([])
+  const schemes = ref<DesignScheme[]>([])
+
   // 当前选中的项目、产品、方案、版本
   const currentProject = ref<Project | null>(null)
   const currentProduct = ref<Product | null>(null)
@@ -163,6 +168,16 @@ export const useEngineeringStore = defineStore('engineering', () => {
   // Actions - 项目管理
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  async function loadProjects() {
+    try {
+      const res = await projectApi.list({ size: 100, is_active: true })
+      projects.value = res.data.items || []
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      ElMessage.error('加载项目列表失败')
+    }
+  }
+
   async function loadProject(projectId: number) {
     try {
       const res = await projectApi.detail(projectId)
@@ -177,13 +192,25 @@ export const useEngineeringStore = defineStore('engineering', () => {
   // Actions - 产品管理
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  async function loadProducts(projectId: number) {
+    try {
+      const res = await productApi.list({ project_id: projectId, size: 100, is_active: true })
+      products.value = res.data.items || []
+    } catch (error) {
+      console.error('Failed to load products:', error)
+      ElMessage.error('加载产品列表失败')
+    }
+  }
+
   async function loadProduct(productId: number) {
     try {
       const res = await productApi.detail(productId)
       currentProduct.value = res.data
+      return res.data
     } catch (error) {
       console.error('Failed to load product:', error)
       ElMessage.error('加载产品失败')
+      return null
     }
   }
 
@@ -191,13 +218,25 @@ export const useEngineeringStore = defineStore('engineering', () => {
   // Actions - 设计方案管理
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  async function loadSchemes(productId: number) {
+    try {
+      const res = await designSchemeApi.list({ product_id: productId, size: 100, is_active: true })
+      schemes.value = res.data.items || []
+    } catch (error) {
+      console.error('Failed to load schemes:', error)
+      ElMessage.error('加载方案列表失败')
+    }
+  }
+
   async function loadScheme(schemeId: number) {
     try {
       const res = await designSchemeApi.detail(schemeId)
       currentScheme.value = res.data
+      return res.data
     } catch (error) {
       console.error('Failed to load scheme:', error)
       ElMessage.error('加载设计方案失败')
+      return null
     }
   }
 
@@ -448,6 +487,46 @@ export const useEngineeringStore = defineStore('engineering', () => {
     }
   }
 
+  async function addFirstProcessWithDefaultRoute(processId: number) {
+    if (!selectedBomNode.value) {
+      ElMessage.warning('请先选择 BOM 节点')
+      return
+    }
+
+    try {
+      const defaultRouteName = `${selectedBomNode.value.node_name}_默认路线`
+      const defaultRouteCode = `R_${selectedBomNode.value.code}_${Date.now()}`
+      
+      const createRes = await componentProcessRouteApi.create({
+        bom_node_id: selectedBomNode.value.id,
+        route_name: defaultRouteName,
+        route_code: defaultRouteCode,
+        description: '系统自动创建的默认工艺路线',
+      } as ComponentProcessRoute)
+      
+      const newRoute = createRes.data
+      selectedRoute.value = newRoute
+      
+      const nextOrder = 1
+      await routeStepBindApi.create({
+        route_id: newRoute.id,
+        process_id: processId,
+        step_order: nextOrder,
+      })
+      
+      ElMessage.success('添加首道工序成功')
+      
+      await loadProcessRoutes(selectedBomNode.value.id)
+      
+      await updateBomNode(selectedBomNode.value.id, { is_configured: true })
+      
+      return newRoute
+    } catch (error) {
+      console.error('Failed to add first process with default route:', error)
+      ElMessage.error('添加首道工序失败')
+    }
+  }
+
   async function updateRouteStep(stepId: number, data: Partial<RouteStepBind>) {
     try {
       const res = await routeStepBindApi.update(stepId, data)
@@ -575,6 +654,9 @@ export const useEngineeringStore = defineStore('engineering', () => {
 
   return {
     // 状态
+    projects,
+    products,
+    schemes,
     currentProject,
     currentProduct,
     currentScheme,
@@ -603,8 +685,11 @@ export const useEngineeringStore = defineStore('engineering', () => {
     canGenerateSnapshot,
 
     // Actions
+    loadProjects,
     loadProject,
+    loadProducts,
     loadProduct,
+    loadSchemes,
     loadScheme,
     loadSchemeVersions,
     switchSchemeVersion,
@@ -620,6 +705,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
     loadRouteSteps,
     selectStep,
     addRouteStep,
+    addFirstProcessWithDefaultRoute,
     updateRouteStep,
     deleteRouteStep,
     reorderRouteSteps,

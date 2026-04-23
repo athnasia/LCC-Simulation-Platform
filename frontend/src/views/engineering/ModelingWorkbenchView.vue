@@ -3,20 +3,71 @@
     <!-- 顶部操作栏 -->
     <div class="workbench-header">
       <div class="header-left">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-if="currentProject">
-            {{ currentProject.name }}
-          </el-breadcrumb-item>
-          <el-breadcrumb-item v-if="currentProduct">
-            {{ currentProduct.name }}
-          </el-breadcrumb-item>
-          <el-breadcrumb-item v-if="currentScheme">
-            {{ currentScheme.name }}
-          </el-breadcrumb-item>
-          <el-breadcrumb-item v-if="currentSchemeVersion">
-            版本 {{ currentSchemeVersion.version }}
-          </el-breadcrumb-item>
-        </el-breadcrumb>
+        <!-- 级联选择器 -->
+        <div class="cascade-selectors">
+          <el-select
+            v-model="selectedProjectId"
+            placeholder="选择项目"
+            clearable
+            style="width: 180px"
+            @change="handleProjectChange"
+          >
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            />
+          </el-select>
+
+          <el-select
+            v-model="selectedProductId"
+            placeholder="选择产品"
+            clearable
+            :disabled="!selectedProjectId"
+            style="width: 180px"
+            @change="handleProductChange"
+          >
+            <el-option
+              v-for="product in products"
+              :key="product.id"
+              :label="product.name"
+              :value="product.id"
+            />
+          </el-select>
+
+          <el-select
+            v-model="selectedSchemeId"
+            placeholder="选择方案"
+            clearable
+            :disabled="!selectedProductId"
+            style="width: 180px"
+            @change="handleSchemeChange"
+          >
+            <el-option
+              v-for="scheme in schemes"
+              :key="scheme.id"
+              :label="scheme.name"
+              :value="scheme.id"
+            />
+          </el-select>
+
+          <el-select
+            v-model="selectedVersionId"
+            placeholder="选择版本"
+            clearable
+            :disabled="!selectedSchemeId"
+            style="width: 150px"
+            @change="handleVersionChange"
+          >
+            <el-option
+              v-for="version in schemeVersions"
+              :key="version.id"
+              :label="`版本 ${version.version}`"
+              :value="version.id"
+            />
+          </el-select>
+        </div>
         
         <div v-if="!hasCurrentSchemeVersion" class="no-version-hint">
           <el-text type="info">请先选择项目、产品和方案版本</el-text>
@@ -69,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
@@ -81,15 +132,77 @@ const router = useRouter()
 const route = useRoute()
 const store = useEngineeringStore()
 
+// 选择器状态
+const selectedProjectId = ref<number | null>(null)
+const selectedProductId = ref<number | null>(null)
+const selectedSchemeId = ref<number | null>(null)
+const selectedVersionId = ref<number | null>(null)
+
 // 从 Store 获取状态
-const currentProject = computed(() => store.currentProject)
-const currentProduct = computed(() => store.currentProduct)
-const currentScheme = computed(() => store.currentScheme)
+const projects = computed(() => store.projects)
+const products = computed(() => store.products)
+const schemes = computed(() => store.schemes)
+const schemeVersions = computed(() => store.schemeVersions)
 const currentSchemeVersion = computed(() => store.currentSchemeVersion)
 const hasCurrentSchemeVersion = computed(() => store.hasCurrentSchemeVersion)
 const isAllLeafNodesConfigured = computed(() => store.isAllLeafNodesConfigured)
 const leafNodeStats = computed(() => store.leafNodeStats)
 const canGenerateSnapshot = computed(() => store.canGenerateSnapshot)
+
+// 项目选择变化
+async function handleProjectChange(projectId: number | null) {
+  selectedProductId.value = null
+  selectedSchemeId.value = null
+  selectedVersionId.value = null
+  store.currentProduct = null
+  store.currentScheme = null
+  store.currentSchemeVersion = null
+  store.products = []
+  store.schemes = []
+  store.schemeVersions = []
+  store.bomTree = []
+  
+  if (projectId) {
+    await store.loadProducts(projectId)
+  }
+}
+
+// 产品选择变化
+async function handleProductChange(productId: number | null) {
+  selectedSchemeId.value = null
+  selectedVersionId.value = null
+  store.currentScheme = null
+  store.currentSchemeVersion = null
+  store.schemes = []
+  store.schemeVersions = []
+  store.bomTree = []
+  
+  if (productId) {
+    await store.loadSchemes(productId)
+  }
+}
+
+// 方案选择变化
+async function handleSchemeChange(schemeId: number | null) {
+  selectedVersionId.value = null
+  store.currentSchemeVersion = null
+  store.schemeVersions = []
+  store.bomTree = []
+  
+  if (schemeId) {
+    await store.loadSchemeVersions(schemeId)
+  }
+}
+
+// 版本选择变化
+async function handleVersionChange(versionId: number | null) {
+  if (versionId) {
+    await store.switchSchemeVersion(versionId)
+  } else {
+    store.currentSchemeVersion = null
+    store.bomTree = []
+  }
+}
 
 // 生成快照
 async function handleGenerateSnapshot() {
@@ -126,8 +239,6 @@ async function handleGenerateSnapshot() {
     
     if (result) {
       ElMessage.success('快照生成成功')
-      // 可以跳转到快照详情页或仿真配置页
-      // router.push(`/engineering/snapshots/${result.snapshot_id}`)
     }
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
@@ -136,25 +247,48 @@ async function handleGenerateSnapshot() {
   }
 }
 
-// 初始化：从路由参数加载数据
+// 初始化
 onMounted(async () => {
+  await store.loadProjects()
+  
   const { projectId, productId, schemeId, versionId } = route.query
   
-  if (projectId) {
-    await store.loadProject(Number(projectId))
-  }
-  
-  if (productId) {
-    await store.loadProduct(Number(productId))
-  }
-  
-  if (schemeId) {
-    await store.loadScheme(Number(schemeId))
-    await store.loadSchemeVersions(Number(schemeId))
-  }
-  
-  if (versionId) {
-    await store.switchSchemeVersion(Number(versionId))
+  if (schemeId && versionId) {
+    const scheme = await store.loadScheme(Number(schemeId))
+    if (scheme && scheme.product_id) {
+      selectedSchemeId.value = Number(schemeId)
+      
+      const product = await store.loadProduct(scheme.product_id)
+      if (product && product.project_id) {
+        selectedProductId.value = scheme.product_id
+        selectedProjectId.value = product.project_id
+        
+        await store.loadProducts(product.project_id)
+        await store.loadSchemes(scheme.product_id)
+      }
+      
+      await store.loadSchemeVersions(Number(schemeId))
+      selectedVersionId.value = Number(versionId)
+      await store.switchSchemeVersion(Number(versionId))
+    }
+  } else if (projectId) {
+    selectedProjectId.value = Number(projectId)
+    await store.loadProducts(Number(projectId))
+    
+    if (productId) {
+      selectedProductId.value = Number(productId)
+      await store.loadSchemes(Number(productId))
+      
+      if (schemeId) {
+        selectedSchemeId.value = Number(schemeId)
+        await store.loadSchemeVersions(Number(schemeId))
+        
+        if (versionId) {
+          selectedVersionId.value = Number(versionId)
+          await store.switchSchemeVersion(Number(versionId))
+        }
+      }
+    }
   }
 })
 </script>
@@ -181,6 +315,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.cascade-selectors {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .no-version-hint {

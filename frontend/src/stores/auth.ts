@@ -1,31 +1,17 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
-import request from '@/utils/request'
 import router from '@/router'
+import { authApi, type CurrentUser, type TokenResponse } from '@/api/auth'
 
-interface LoginResponse {
-  access_token: string
-  token_type: string
-}
-
-interface CurrentUser {
-  id: number
-  username: string
-  real_name: string
-  is_active: boolean
-  permission_scopes: string[]
-  roles: Array<{
-    id: number
-    name: string
-    code: string
-    is_active: boolean
-  }>
-}
+const TOKEN_KEY = 'access_token'
+const REFRESH_TOKEN_KEY = 'refresh_token'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('access_token'))
+  const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  const refreshToken = ref<string | null>(localStorage.getItem(REFRESH_TOKEN_KEY))
   const currentUser = ref<CurrentUser | null>(null)
+  const isRefreshing = ref(false)
 
   const isLoggedIn = computed(() => !!token.value)
   const isSuperAdmin = computed(() =>
@@ -69,16 +55,43 @@ export const useAuthStore = defineStore('auth', () => {
 
   function clearAuthState() {
     token.value = null
+    refreshToken.value = null
     currentUser.value = null
-    localStorage.removeItem('access_token')
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+  }
+
+  function saveTokens(tokens: TokenResponse) {
+    token.value = tokens.access_token
+    refreshToken.value = tokens.refresh_token
+    localStorage.setItem(TOKEN_KEY, tokens.access_token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token)
+  }
+
+  async function handleTokenRefresh(): Promise<boolean> {
+    const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+    if (!storedRefreshToken || isRefreshing.value) {
+      return false
+    }
+
+    isRefreshing.value = true
+    try {
+      const res = await authApi.refresh({ refresh_token: storedRefreshToken })
+      saveTokens(res.data)
+      return true
+    } catch {
+      clearAuthState()
+      ElMessage.error('登录已过期，请重新登录')
+      router.push('/login')
+      return false
+    } finally {
+      isRefreshing.value = false
+    }
   }
 
   async function login(username: string, password: string) {
-    // 后端 LoginRequest 是 Pydantic JSON body，不是 OAuth2 form-data
-    const res = await request.post<LoginResponse>('/auth/login', { username, password })
-
-    token.value = res.data.access_token
-    localStorage.setItem('access_token', res.data.access_token)
+    const res = await authApi.login({ username, password })
+    saveTokens(res.data)
     ElMessage.success('登录成功')
     await fetchCurrentUser({ silent: false })
     router.push('/')
@@ -86,7 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchCurrentUser(options: { silent?: boolean } = {}) {
     try {
-      const res = await request.get<CurrentUser>('/auth/me')
+      const res = await authApi.me()
       currentUser.value = res.data
       return true
     } catch {
@@ -106,7 +119,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token,
+    refreshToken,
     currentUser,
+    isRefreshing,
     isLoggedIn,
     isSuperAdmin,
     permissionScopes,
@@ -116,5 +131,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     fetchCurrentUser,
     logout,
+    handleTokenRefresh,
+    saveTokens,
+    clearAuthState,
   }
 })

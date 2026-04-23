@@ -137,7 +137,7 @@ class DesignSchemeVersionBase(BaseModel):
 
 
 class DesignSchemeVersionCreate(DesignSchemeVersionBase):
-    pass
+    clone_from_version_id: int | None = Field(None, description="克隆源版本 ID（用于派生新版本）")
 
 
 class DesignSchemeVersionUpdate(BaseModel):
@@ -162,6 +162,17 @@ class DesignSchemeVersionResponse(DesignSchemeVersionBase):
 # 五、BOM 节点（BomNode）
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class BomNodeUnitBrief(BaseModel):
+    """BOM 节点单位简要信息"""
+    id: int
+    name: str
+    code: str
+    symbol: str | None
+
+    class Config:
+        from_attributes = True
+
+
 class BomNodeBase(BaseModel):
     scheme_version_id: int = Field(..., description="所属方案版本 ID")
     parent_id: int | None = Field(None, description="父节点 ID")
@@ -169,6 +180,7 @@ class BomNodeBase(BaseModel):
     code: str = Field(..., min_length=1, max_length=50, description="节点编码")
     node_type: str = Field("PART", description="节点类型（PART/ASSEMBLY）")
     quantity: Decimal | None = Field(None, ge=0, description="数量")
+    unit_id: int | None = Field(None, description="单位 ID")
     sort_order: int = Field(0, ge=0, description="排序值")
     is_configured: bool = Field(False, description="是否已配置工艺路线")
     attributes: dict[str, Any] | None = Field(None, description="柔性属性（从基础字典与模板中拉取）")
@@ -183,6 +195,7 @@ class BomNodeUpdate(BaseModel):
     node_name: str | None = Field(None, min_length=1, max_length=100)
     node_type: str | None = None
     quantity: Decimal | None = Field(None, ge=0)
+    unit_id: int | None = None
     sort_order: int | None = Field(None, ge=0)
     is_configured: bool | None = None
     attributes: dict[str, Any] | None = None
@@ -191,6 +204,7 @@ class BomNodeUpdate(BaseModel):
 
 class BomNodeResponse(BomNodeBase):
     id: int
+    unit: BomNodeUnitBrief | None = None
     created_at: datetime
     updated_at: datetime
     created_by: str | None
@@ -246,6 +260,9 @@ class RouteStepBindBase(BaseModel):
     route_id: int = Field(..., description="所属路线 ID")
     process_id: int = Field(..., description="标准工艺 ID")
     step_order: int = Field(..., ge=1, description="工序顺序")
+    process_type: str = Field("IN_HOUSE", description="加工方式（IN_HOUSE=自制，OUTSOURCED=外协）")
+    override_equipment_id: int | None = Field(None, description="覆写设备 ID（自制时使用）")
+    outsource_price: Decimal | None = Field(None, ge=0, description="外协单价（外协时使用）")
     override_t_set: Decimal | None = Field(None, ge=0, description="覆写准备工时（h）")
     override_t_run: Decimal | None = Field(None, ge=0, description="覆写运行工时（h）")
     override_mat_params: dict[str, Any] | None = Field(
@@ -261,6 +278,9 @@ class RouteStepBindCreate(RouteStepBindBase):
 
 class RouteStepBindUpdate(BaseModel):
     step_order: int | None = Field(None, ge=1)
+    process_type: str | None = None
+    override_equipment_id: int | None = None
+    outsource_price: Decimal | None = Field(None, ge=0)
     override_t_set: Decimal | None = Field(None, ge=0)
     override_t_run: Decimal | None = Field(None, ge=0)
     override_mat_params: dict[str, Any] | None = None

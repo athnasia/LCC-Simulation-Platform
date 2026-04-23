@@ -25,13 +25,8 @@ from app.core.config import settings  # noqa: E402
 from app.models.base import Base      # noqa: E402
 from app.models import system         # noqa: E402, F401
 from app.models import system_dictionary  # noqa: E402, F401
-
-# 后续新增模型时，在此追加（示例）：
-# from app.models import master_data   # noqa: F401
-# from app.models import engineering   # noqa: F401
-# from app.models import costing       # noqa: F401
-# from app.models import simulation    # noqa: F401
-# from app.models import iot           # noqa: F401
+from app.models import master_data    # noqa: E402, F401
+from app.models import engineering    # noqa: E402, F401
 
 # ── Alembic 标准配置 ───────────────────────────────────────────────────────────
 config = context.config

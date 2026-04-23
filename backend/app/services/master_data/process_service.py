@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -100,6 +101,57 @@ class ProcessService:
         process = self._get_or_404(process_id)
         return ProcessResponse.model_validate(process)
 
+    def _fetch_resource_names_batch(
+        self, resources: list[tuple[ResourceType, int]]
+    ) -> dict[tuple[ResourceType, int], str | None]:
+        """
+        批量获取资源名称（优化版：避免 N+1 查询）
+        
+        Args:
+            resources: 资源列表，每个元素为 (resource_type, resource_id)
+        
+        Returns:
+            字典，key 为 (resource_type, resource_id)，value 为资源名称
+        """
+        result: dict[tuple[ResourceType, int], str | None] = {}
+        
+        by_type: dict[ResourceType, list[int]] = defaultdict(list)
+        for resource_type, resource_id in resources:
+            by_type[resource_type].append(resource_id)
+        
+        if ResourceType.MATERIAL in by_type:
+            material_ids = by_type[ResourceType.MATERIAL]
+            stmt = select(MdMaterial.id, MdMaterial.name).where(
+                MdMaterial.id.in_(material_ids)
+            )
+            rows = self.db.execute(stmt).all()
+            for row in rows:
+                result[(ResourceType.MATERIAL, row[0])] = row[1]
+        
+        if ResourceType.EQUIPMENT in by_type:
+            equipment_ids = by_type[ResourceType.EQUIPMENT]
+            stmt = select(MdEquipment.id, MdEquipment.name).where(
+                MdEquipment.id.in_(equipment_ids)
+            )
+            rows = self.db.execute(stmt).all()
+            for row in rows:
+                result[(ResourceType.EQUIPMENT, row[0])] = row[1]
+        
+        if ResourceType.LABOR in by_type:
+            labor_ids = by_type[ResourceType.LABOR]
+            stmt = select(MdLabor.id, MdLabor.name).where(
+                MdLabor.id.in_(labor_ids)
+            )
+            rows = self.db.execute(stmt).all()
+            for row in rows:
+                result[(ResourceType.LABOR, row[0])] = row[1]
+        
+        for resource_type, resource_id in resources:
+            if (resource_type, resource_id) not in result:
+                result[(resource_type, resource_id)] = None
+        
+        return result
+
     def create(self, payload: ProcessCreate, operator: str) -> ProcessResponse:
         self._assert_code_unique(payload.code)
 
@@ -112,9 +164,16 @@ class ProcessService:
         self.db.flush()
 
         if payload.resources:
+            resource_keys = [
+                (res.resource_type, res.resource_id)
+                for res in payload.resources
+            ]
+            resource_names = self._fetch_resource_names_batch(resource_keys)
+            
             for resource_data in payload.resources:
-                # 获取资源名称快照 (M-8)
-                resource_name = self._fetch_resource_name(resource_data.resource_type, resource_data.resource_id)
+                resource_name = resource_names.get(
+                    (resource_data.resource_type, resource_data.resource_id)
+                )
                 
                 resource = MdProcessResource(
                     process_id=process.id,
@@ -233,7 +292,6 @@ class ProcessService:
                 message=f"该工序已挂载此资源（类型：{payload.resource_type.value}，ID：{payload.resource_id}），请勿重复添加",
             )
 
-        # 获取资源名称快照 (M-8)
         resource_name = self._fetch_resource_name(payload.resource_type, payload.resource_id)
 
         resource = MdProcessResource(
@@ -265,7 +323,7 @@ class ProcessService:
         self.db.flush()
 
     def _fetch_resource_name(self, resource_type: ResourceType, resource_id: int) -> str | None:
-        """辅助方法：获取资源名称快照"""
+        """辅助方法：获取单个资源名称快照"""
         if resource_type == ResourceType.MATERIAL:
             stmt = select(MdMaterial.name).where(MdMaterial.id == resource_id)
         elif resource_type == ResourceType.EQUIPMENT:

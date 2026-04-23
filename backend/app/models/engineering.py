@@ -181,6 +181,12 @@ class EngBomNode(AuditMixin, Base):
     quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True, comment="数量"
     )
+    unit_id: Mapped[int | None] = mapped_column(
+        BigInteger, 
+        ForeignKey("md_unit.id"), 
+        nullable=True, 
+        comment="单位 ID"
+    )
     sort_order: Mapped[int] = mapped_column(Integer, default=0, comment="排序值")
     is_configured: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="0", comment="是否已配置工艺路线"
@@ -199,6 +205,7 @@ class EngBomNode(AuditMixin, Base):
     children: Mapped[list["EngBomNode"]] = relationship(
         "EngBomNode", back_populates="parent", cascade="all, delete-orphan"
     )
+    unit: Mapped["MdUnit | None"] = relationship("MdUnit")
     process_routes: Mapped[list["EngComponentProcessRoute"]] = relationship(
         "EngComponentProcessRoute", back_populates="bom_node", cascade="all, delete-orphan"
     )
@@ -263,6 +270,19 @@ class EngRouteStepBind(AuditMixin, Base):
     )
     step_order: Mapped[int] = mapped_column(Integer, nullable=False, comment="工序顺序")
     
+    process_type: Mapped[str] = mapped_column(
+        String(20), default="IN_HOUSE", nullable=False, comment="加工方式（IN_HOUSE=自制，OUTSOURCED=外协）"
+    )
+    override_equipment_id: Mapped[int | None] = mapped_column(
+        BigInteger, 
+        ForeignKey("md_equipment.id"), 
+        nullable=True, 
+        comment="覆写设备 ID（自制时使用）"
+    )
+    outsource_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="外协单价（外协时使用）"
+    )
+    
     override_t_set: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True, comment="覆写准备工时（h）"
     )
@@ -279,6 +299,7 @@ class EngRouteStepBind(AuditMixin, Base):
         "EngComponentProcessRoute", back_populates="steps"
     )
     process: Mapped["MdProcess"] = relationship("MdProcess")
+    equipment: Mapped["MdEquipment | None"] = relationship("MdEquipment")
 
 
 # ── 模型快照 ───────────────────────────────────────────────────────────────────────────
