@@ -1,7 +1,17 @@
 <template>
   <div class="modeling-workbench">
+    <transition name="boot-overlay-fade">
+      <div v-if="showBootOverlay" class="boot-overlay">
+        <div class="boot-overlay-card">
+          <el-icon class="boot-overlay-icon is-loading"><Loading /></el-icon>
+          <h3>{{ bootOverlayTitle }}</h3>
+          <p>{{ bootOverlayDescription }}</p>
+        </div>
+      </div>
+    </transition>
+
     <!-- 顶部操作栏 -->
-    <div class="workbench-header">
+    <div class="workbench-header" :class="{ 'is-booting': showBootOverlay }">
       <div class="header-left">
         <!-- 级联选择器 -->
         <div class="cascade-selectors">
@@ -88,6 +98,10 @@
             style="width: 120px; margin-left: 8px;"
           />
         </div>
+
+        <el-tag v-if="currentSchemeVersion && !isCurrentVersionEditable" type="warning">
+          已发布版本只读
+        </el-tag>
         
         <el-button 
           type="primary" 
@@ -100,7 +114,7 @@
     </div>
     
     <!-- 三栏布局 -->
-    <div class="workbench-body">
+    <div class="workbench-body" :class="{ 'is-booting': showBootOverlay }">
       <!-- 左栏：BOM 结构树 -->
       <div class="panel panel-left">
         <BomTreePanel />
@@ -120,9 +134,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import { useEngineeringStore } from '@/stores/engineering'
 import BomTreePanel from '@/components/engineering/BomTreePanel.vue'
 import ProcessRoutePanel from '@/components/engineering/ProcessRoutePanel.vue'
@@ -137,6 +152,7 @@ const selectedProjectId = ref<number | null>(null)
 const selectedProductId = ref<number | null>(null)
 const selectedSchemeId = ref<number | null>(null)
 const selectedVersionId = ref<number | null>(null)
+const showBootOverlay = ref(true)
 
 // 从 Store 获取状态
 const projects = computed(() => store.projects)
@@ -145,9 +161,47 @@ const schemes = computed(() => store.schemes)
 const schemeVersions = computed(() => store.schemeVersions)
 const currentSchemeVersion = computed(() => store.currentSchemeVersion)
 const hasCurrentSchemeVersion = computed(() => store.hasCurrentSchemeVersion)
+const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
 const isAllLeafNodesConfigured = computed(() => store.isAllLeafNodesConfigured)
 const leafNodeStats = computed(() => store.leafNodeStats)
 const canGenerateSnapshot = computed(() => store.canGenerateSnapshot)
+const routeWorkbenchKey = computed(() => [
+  route.query.projectId || '',
+  route.query.productId || '',
+  route.query.schemeId || '',
+  route.query.versionId || '',
+  route.query.readonly || '',
+].join('|'))
+const bootOverlayTitle = computed(() => {
+  return route.query.versionId ? '正在恢复工作台状态' : '正在加载工程建模工作台'
+})
+const bootOverlayDescription = computed(() => {
+  return route.query.versionId
+    ? '正在同步方案版本、BOM 结构与工艺配置，请稍候。'
+    : '正在准备项目、产品、方案与版本数据，请稍候。'
+})
+
+function waitForPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+}
+
+async function revealWorkbenchWhenReady() {
+  await nextTick()
+  await waitForPaint()
+  showBootOverlay.value = false
+}
+
+function resetWorkbenchViewState() {
+  selectedProjectId.value = null
+  selectedProductId.value = null
+  selectedSchemeId.value = null
+  selectedVersionId.value = null
+  store.resetState()
+}
 
 // 项目选择变化
 async function handleProjectChange(projectId: number | null) {
@@ -161,6 +215,11 @@ async function handleProjectChange(projectId: number | null) {
   store.schemes = []
   store.schemeVersions = []
   store.bomTree = []
+  store.selectedBomNode = null
+  store.processRoutes = []
+  store.selectedRoute = null
+  store.routeSteps = []
+  store.selectedStep = null
   
   if (projectId) {
     await store.loadProducts(projectId)
@@ -176,6 +235,11 @@ async function handleProductChange(productId: number | null) {
   store.schemes = []
   store.schemeVersions = []
   store.bomTree = []
+  store.selectedBomNode = null
+  store.processRoutes = []
+  store.selectedRoute = null
+  store.routeSteps = []
+  store.selectedStep = null
   
   if (productId) {
     await store.loadSchemes(productId)
@@ -188,6 +252,11 @@ async function handleSchemeChange(schemeId: number | null) {
   store.currentSchemeVersion = null
   store.schemeVersions = []
   store.bomTree = []
+  store.selectedBomNode = null
+  store.processRoutes = []
+  store.selectedRoute = null
+  store.routeSteps = []
+  store.selectedStep = null
   
   if (schemeId) {
     await store.loadSchemeVersions(schemeId)
@@ -201,6 +270,11 @@ async function handleVersionChange(versionId: number | null) {
   } else {
     store.currentSchemeVersion = null
     store.bomTree = []
+    store.selectedBomNode = null
+    store.processRoutes = []
+    store.selectedRoute = null
+    store.routeSteps = []
+    store.selectedStep = null
   }
 }
 
@@ -247,8 +321,9 @@ async function handleGenerateSnapshot() {
   }
 }
 
-// 初始化
-onMounted(async () => {
+async function initializeWorkbench() {
+  showBootOverlay.value = true
+  resetWorkbenchViewState()
   await store.loadProjects()
   
   const { projectId, productId, schemeId, versionId } = route.query
@@ -290,15 +365,81 @@ onMounted(async () => {
       }
     }
   }
-})
+}
+
+watch(routeWorkbenchKey, async () => {
+  try {
+    await initializeWorkbench()
+  } finally {
+    await revealWorkbenchWhenReady()
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
 .modeling-workbench {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 60px);
   background-color: #f5f7fa;
+}
+
+.boot-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(18px);
+  background: rgba(245, 247, 250, 0.7);
+}
+
+.boot-overlay-card {
+  min-width: 320px;
+  max-width: 420px;
+  padding: 28px 32px;
+  border-radius: 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.boot-overlay-icon {
+  font-size: 28px;
+  color: #2563eb;
+}
+
+.boot-overlay-card h3 {
+  margin: 14px 0 8px;
+  color: #1f2937;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.boot-overlay-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.workbench-header.is-booting,
+.workbench-body.is-booting {
+  user-select: none;
+}
+
+.boot-overlay-fade-enter-active,
+.boot-overlay-fade-leave-active {
+  transition: opacity 0.24s ease;
+}
+
+.boot-overlay-fade-enter-from,
+.boot-overlay-fade-leave-to {
+  opacity: 0;
 }
 
 .workbench-header {
@@ -368,5 +509,17 @@ onMounted(async () => {
 .panel-right {
   width: 35%;
   min-width: 320px;
+}
+
+@media (max-width: 768px) {
+  .boot-overlay {
+    padding: 16px;
+  }
+
+  .boot-overlay-card {
+    min-width: auto;
+    width: 100%;
+    padding: 24px 20px;
+  }
 }
 </style>

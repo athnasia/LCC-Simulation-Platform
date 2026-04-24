@@ -159,6 +159,11 @@ pnpm dev
 	- 默认保留 `mysql`、`redis`、`worker`。
 	- 若后续把 API 也切入 Docker，需要明确说明是“全容器模式”，并重新校验 `8001/33306/63799` 的端口接管关系。
 
+5. **凡是修改仿真执行入口代码，必须重启 `lcc-app-worker-1`**
+  - 适用文件：`backend/app/services/simulation_service.py`、`backend/app/worker/tasks.py`。
+  - 原因：当前开发模式下 API 跑在宿主机，LCC 异步仿真由 Docker 中的 `lcc-app-worker-1` 消费；若只改代码不重启 Worker，会出现“接口参数已更新，但实际仿真结果仍由旧 Worker 代码生成”的错配。
+  - 标准操作：修改上述文件后，必须执行 `docker compose restart worker`，再进行仿真联调或结果验收。
+
 ### 7.3.3 数据迁移与容器切换规则（已验证）
 
 1. **旧库到新库的迁移不能只靠 Alembic**

@@ -11,7 +11,7 @@
 
 初始化内容：
     1. 根部门       — 集团总部（ROOT）
-    2. 模块六权限点   — 系统管理全部资源操作权限
+    2. 全站权限点基线 — 菜单所需 read 权限 + 各模块资源操作权限
     3. 内置角色      — 超级管理员 / 系统管理员 / 系统审计员
     4. 管理员账号    — admin / 123456
     5. 关系绑定      — admin 归属集团总部，拥有 SUPER_ADMIN 角色
@@ -85,13 +85,84 @@ _ADMIN_USER = {
     "real_name": "系统管理员",
 }
 
+_MENU_PERMISSION_SEEDS = [
+    {
+        "name": "首页",
+        "code": "MENU_01_HOME",
+        "resource": "/dashboard",
+        "action": "read",
+        "description": "一级菜单：首页",
+    },
+    {
+        "name": "主数据中心",
+        "code": "MENU_02_MASTER_DATA",
+        "resource": "/master-data",
+        "action": "read",
+        "description": "一级菜单：主数据中心",
+    },
+    {
+        "name": "业务字典",
+        "code": "PAGE_02_01_DICTIONARIES",
+        "resource": "/master-data/dictionaries",
+        "action": "read",
+        "description": "二级菜单：业务字典，对应前端路由 /master-data/dictionaries",
+        "parent_code": "MENU_02_MASTER_DATA",
+    },
+    {
+        "name": "工程建模中心",
+        "code": "MENU_03_ENGINEERING",
+        "resource": "/engineering",
+        "action": "read",
+        "description": "一级菜单：工程建模中心",
+    },
+    {
+        "name": "设计要素编排",
+        "code": "PAGE_03_02_WORKBENCH",
+        "resource": "/engineering/workbench",
+        "action": "read",
+        "description": "二级菜单：设计要素编排，对应前端路由 /engineering/workbench",
+        "parent_code": "MENU_03_ENGINEERING",
+    },
+    {
+        "name": "成本仿真与决策",
+        "code": "MENU_04_COSTING_DECISION",
+        "resource": "/costing",
+        "action": "read",
+        "description": "一级菜单：成本仿真与决策",
+    },
+    {
+        "name": "产品快照中心",
+        "code": "PAGE_04_02_SNAPSHOT_CENTER",
+        "resource": "/costing/snapshot-center",
+        "action": "read",
+        "description": "二级菜单：产品快照中心，对应前端路由 /costing/snapshot-center",
+        "parent_code": "MENU_04_COSTING_DECISION",
+    },
+    {
+        "name": "仿真结果优选与决策",
+        "code": "PAGE_04_03_DECISION_CENTER",
+        "resource": "/costing/decision-center",
+        "action": "read",
+        "description": "二级菜单：仿真结果优选与决策，对应前端路由 /costing/decision-center",
+        "parent_code": "MENU_04_COSTING_DECISION",
+    },
+    {
+        "name": "系统管理",
+        "code": "MENU_05_SYSTEM",
+        "resource": "/system",
+        "action": "read",
+        "description": "一级菜单：系统管理",
+    },
+]
+
 _SYSTEM_PERMISSION_SEEDS = [
     {
-        "name": "部门查看",
+        "name": "部门树",
         "code": "SYSTEM_DEPARTMENTS_READ",
         "resource": "/system/departments",
         "action": "read",
-        "description": "查看系统部门列表与详情",
+        "description": "用户管理页依赖的部门树数据，对应表 org_department",
+        "parent_code": "SYSTEM_USERS_READ",
     },
     {
         "name": "部门维护",
@@ -99,6 +170,7 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/departments",
         "action": "write",
         "description": "新建和编辑系统部门",
+        "parent_code": "SYSTEM_DEPARTMENTS_READ",
     },
     {
         "name": "部门删除",
@@ -106,13 +178,15 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/departments",
         "action": "delete",
         "description": "删除系统部门",
+        "parent_code": "SYSTEM_DEPARTMENTS_READ",
     },
     {
-        "name": "权限查看",
+        "name": "菜单权限",
         "code": "SYSTEM_PERMISSIONS_READ",
         "resource": "/system/permissions",
         "action": "read",
-        "description": "查看权限点列表与详情",
+        "description": "页面权限：菜单权限，对应前端路由 /system/permissions，对应表 sys_permission",
+        "parent_code": "MENU_05_SYSTEM",
     },
     {
         "name": "权限维护",
@@ -120,6 +194,7 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/permissions",
         "action": "write",
         "description": "新建和编辑权限点",
+        "parent_code": "SYSTEM_PERMISSIONS_READ",
     },
     {
         "name": "权限删除",
@@ -127,13 +202,15 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/permissions",
         "action": "delete",
         "description": "删除权限点",
+        "parent_code": "SYSTEM_PERMISSIONS_READ",
     },
     {
-        "name": "角色查看",
+        "name": "角色权限",
         "code": "SYSTEM_ROLES_READ",
         "resource": "/system/roles",
         "action": "read",
-        "description": "查看角色列表与详情",
+        "description": "页面权限：角色权限，对应前端路由 /system/roles，对应表 sys_role、sys_role_permission",
+        "parent_code": "MENU_05_SYSTEM",
     },
     {
         "name": "角色维护",
@@ -141,6 +218,7 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/roles",
         "action": "write",
         "description": "新建和编辑角色",
+        "parent_code": "SYSTEM_ROLES_READ",
     },
     {
         "name": "角色删除",
@@ -148,13 +226,15 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/roles",
         "action": "delete",
         "description": "删除角色",
+        "parent_code": "SYSTEM_ROLES_READ",
     },
     {
-        "name": "用户查看",
+        "name": "用户管理",
         "code": "SYSTEM_USERS_READ",
         "resource": "/system/users",
         "action": "read",
-        "description": "查看用户列表与详情",
+        "description": "页面权限：用户管理，对应前端路由 /system/users，对应表 sys_user、sys_user_role",
+        "parent_code": "MENU_05_SYSTEM",
     },
     {
         "name": "用户维护",
@@ -162,6 +242,7 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/users",
         "action": "write",
         "description": "新建和编辑用户",
+        "parent_code": "SYSTEM_USERS_READ",
     },
     {
         "name": "用户删除",
@@ -169,27 +250,31 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/users",
         "action": "delete",
         "description": "删除用户",
+        "parent_code": "SYSTEM_USERS_READ",
     },
     {
-        "name": "用户管理",
+        "name": "用户高级管理",
         "code": "SYSTEM_USERS_ADMIN",
         "resource": "/system/users",
         "action": "admin",
         "description": "重置用户密码等高级管理操作",
+        "parent_code": "SYSTEM_USERS_READ",
     },
     {
         "name": "审计日志查看",
         "code": "SYSTEM_AUDIT_LOGS_READ",
         "resource": "/system/audit-logs",
         "action": "read",
-        "description": "查看系统审计日志",
+        "description": "页面权限：审计日志，对应前端路由 /system/audit，对应表 sys_audit_log",
+        "parent_code": "MENU_05_SYSTEM",
     },
     {
-        "name": "数据字典查看",
+        "name": "数据字典",
         "code": "SYSTEM_DICTIONARIES_READ",
         "resource": "/system/dictionaries",
         "action": "read",
-        "description": "查看系统级数据字典与缓存聚合结果",
+        "description": "页面权限：数据字典，对应前端路由 /system/dictionaries，对应表 sys_dict_type、sys_dict_item",
+        "parent_code": "MENU_05_SYSTEM",
     },
     {
         "name": "数据字典维护",
@@ -197,6 +282,7 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/dictionaries",
         "action": "write",
         "description": "新建和编辑系统级数据字典",
+        "parent_code": "SYSTEM_DICTIONARIES_READ",
     },
     {
         "name": "数据字典删除",
@@ -204,146 +290,293 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/system/dictionaries",
         "action": "delete",
         "description": "删除系统级数据字典",
+        "parent_code": "SYSTEM_DICTIONARIES_READ",
     },
+]
+
+_MASTER_DATA_PERMISSION_SEEDS = [
     {
-        "name": "人员工时查看",
-        "code": "MASTER_DATA_LABOR_READ",
-        "resource": "/master-data/labor",
+        "name": "基础字典与模板",
+        "code": "MASTER_DATA_DICT_TEMPLATES_READ",
+        "resource": "/master-data/dict-templates",
         "action": "read",
-        "description": "查看人员工时台账",
+        "description": "业务字典页面下的基础字典与模板资源，对应表 md_attr_definition、md_resource_category、md_unit_dimension、md_unit、md_unit_conversion",
+        "parent_code": "PAGE_02_01_DICTIONARIES",
     },
     {
-        "name": "人员工时维护",
-        "code": "MASTER_DATA_LABOR_WRITE",
-        "resource": "/master-data/labor",
+        "name": "基础字典与模板维护",
+        "code": "MASTER_DATA_DICT_TEMPLATES_WRITE",
+        "resource": "/master-data/dict-templates",
         "action": "write",
-        "description": "新建和编辑人员工时与属性",
+        "description": "新建和编辑基础字典与模板",
+        "parent_code": "MASTER_DATA_DICT_TEMPLATES_READ",
     },
     {
-        "name": "人员工时删除",
-        "code": "MASTER_DATA_LABOR_DELETE",
-        "resource": "/master-data/labor",
+        "name": "基础字典与模板删除",
+        "code": "MASTER_DATA_DICT_TEMPLATES_DELETE",
+        "resource": "/master-data/dict-templates",
         "action": "delete",
-        "description": "删除人员工时台账记录",
+        "description": "删除基础字典与模板",
+        "parent_code": "MASTER_DATA_DICT_TEMPLATES_READ",
     },
     {
-        "name": "能源日历查看",
-        "code": "MASTER_DATA_ENERGY_READ",
-        "resource": "/master-data/energy",
+        "name": "物料与材料台账",
+        "code": "MASTER_DATA_MATERIALS_READ",
+        "resource": "/master-data/materials",
         "action": "read",
-        "description": "查看能源日历与费率",
+        "description": "页面权限：物料与材料台账，对应前端路由 /master-data/materials，对应表 md_material",
+        "parent_code": "MENU_02_MASTER_DATA",
     },
     {
-        "name": "能源日历维护",
-        "code": "MASTER_DATA_ENERGY_WRITE",
-        "resource": "/master-data/energy",
+        "name": "材料台账维护",
+        "code": "MASTER_DATA_MATERIALS_WRITE",
+        "resource": "/master-data/materials",
         "action": "write",
-        "description": "新建和编辑能源单价及时段",
+        "description": "新建和编辑材料台账",
+        "parent_code": "MASTER_DATA_MATERIALS_READ",
     },
     {
-        "name": "能源日历删除",
-        "code": "MASTER_DATA_ENERGY_DELETE",
-        "resource": "/master-data/energy",
+        "name": "材料台账删除",
+        "code": "MASTER_DATA_MATERIALS_DELETE",
+        "resource": "/master-data/materials",
         "action": "delete",
-        "description": "删除能源日历配置",
+        "description": "删除材料台账",
+        "parent_code": "MASTER_DATA_MATERIALS_READ",
     },
     {
-        "name": "工艺工时库查看",
+        "name": "设备资产台账",
+        "code": "MASTER_DATA_EQUIPMENTS_READ",
+        "resource": "/master-data/equipments",
+        "action": "read",
+        "description": "页面权限：设备资产台账，对应前端路由 /master-data/equipments，对应表 md_equipment",
+        "parent_code": "MENU_02_MASTER_DATA",
+    },
+    {
+        "name": "设备能力库维护",
+        "code": "MASTER_DATA_EQUIPMENTS_WRITE",
+        "resource": "/master-data/equipments",
+        "action": "write",
+        "description": "新建和编辑设备能力库",
+        "parent_code": "MASTER_DATA_EQUIPMENTS_READ",
+    },
+    {
+        "name": "设备能力库删除",
+        "code": "MASTER_DATA_EQUIPMENTS_DELETE",
+        "resource": "/master-data/equipments",
+        "action": "delete",
+        "description": "删除设备能力库",
+        "parent_code": "MASTER_DATA_EQUIPMENTS_READ",
+    },
+    {
+        "name": "工艺字典",
         "code": "MASTER_DATA_PROCESSES_READ",
         "resource": "/master-data/processes",
         "action": "read",
-        "description": "查看标准工艺与工时模板",
+        "description": "页面权限：工艺字典，对应前端路由 /master-data/processes，对应表 md_process、md_process_resource",
+        "parent_code": "MENU_02_MASTER_DATA",
     },
     {
         "name": "工艺工时库维护",
         "code": "MASTER_DATA_PROCESSES_WRITE",
         "resource": "/master-data/processes",
         "action": "write",
-        "description": "新建和编辑标准工艺库",
+        "description": "新建和编辑工艺工时库及挂载资源",
+        "parent_code": "MASTER_DATA_PROCESSES_READ",
     },
     {
         "name": "工艺工时库删除",
         "code": "MASTER_DATA_PROCESSES_DELETE",
         "resource": "/master-data/processes",
         "action": "delete",
-        "description": "删除工艺模板",
+        "description": "删除工艺工时库记录",
+        "parent_code": "MASTER_DATA_PROCESSES_READ",
     },
     {
-        "name": "工程建模项目查看",
+        "name": "人员岗位与费率",
+        "code": "MASTER_DATA_LABOR_READ",
+        "resource": "/master-data/labor",
+        "action": "read",
+        "description": "页面权限：人员岗位与费率，对应前端路由 /master-data/labor，对应表 md_labor",
+        "parent_code": "MENU_02_MASTER_DATA",
+    },
+    {
+        "name": "人员技能矩阵维护",
+        "code": "MASTER_DATA_LABOR_WRITE",
+        "resource": "/master-data/labor",
+        "action": "write",
+        "description": "新建和编辑人员技能矩阵",
+        "parent_code": "MASTER_DATA_LABOR_READ",
+    },
+    {
+        "name": "人员技能矩阵删除",
+        "code": "MASTER_DATA_LABOR_DELETE",
+        "resource": "/master-data/labor",
+        "action": "delete",
+        "description": "删除人员技能矩阵记录",
+        "parent_code": "MASTER_DATA_LABOR_READ",
+    },
+    {
+        "name": "能源与日历中心",
+        "code": "MASTER_DATA_ENERGY_READ",
+        "resource": "/master-data/energy",
+        "action": "read",
+        "description": "页面权限：能源与日历中心，对应前端路由 /master-data/energy，对应表 md_energy_rate、md_energy_calendar",
+        "parent_code": "MENU_02_MASTER_DATA",
+    },
+    {
+        "name": "能源日历维护",
+        "code": "MASTER_DATA_ENERGY_WRITE",
+        "resource": "/master-data/energy",
+        "action": "write",
+        "description": "新建和编辑能源单价与能源日历",
+        "parent_code": "MASTER_DATA_ENERGY_READ",
+    },
+    {
+        "name": "能源日历删除",
+        "code": "MASTER_DATA_ENERGY_DELETE",
+        "resource": "/master-data/energy",
+        "action": "delete",
+        "description": "删除能源单价与能源日历记录",
+        "parent_code": "MASTER_DATA_ENERGY_READ",
+    },
+]
+
+_ENGINEERING_PERMISSION_SEEDS = [
+    {
+        "name": "产品方案池",
         "code": "ENGINEERING_PROJECTS_READ",
         "resource": "/engineering/projects",
         "action": "read",
-        "description": "查看产品方案池",
+        "description": "页面权限：产品方案池，对应前端路由 /engineering/projects，对应表 eng_project、eng_product、eng_design_scheme、eng_design_scheme_version",
+        "parent_code": "MENU_03_ENGINEERING",
     },
     {
-        "name": "工程建模项目维护",
+        "name": "项目维护",
         "code": "ENGINEERING_PROJECTS_WRITE",
         "resource": "/engineering/projects",
         "action": "write",
-        "description": "新建和编辑产品方案",
+        "description": "新建和编辑工程项目",
+        "parent_code": "ENGINEERING_PROJECTS_READ",
     },
     {
-        "name": "工程建模项目删除",
+        "name": "项目删除",
         "code": "ENGINEERING_PROJECTS_DELETE",
         "resource": "/engineering/projects",
         "action": "delete",
-        "description": "删除产品方案",
+        "description": "删除工程项目",
+        "parent_code": "ENGINEERING_PROJECTS_READ",
     },
     {
-        "name": "工程建模工作台查看",
-        "code": "ENGINEERING_WORKBENCH_READ",
-        "resource": "/engineering/workbench",
+        "name": "产品管理",
+        "code": "ENGINEERING_PRODUCTS_READ",
+        "resource": "/engineering/products",
         "action": "read",
-        "description": "访问工程建模工作台",
+        "description": "产品方案池页面下的产品管理资源，对应表 eng_product",
+        "parent_code": "ENGINEERING_PROJECTS_READ",
     },
     {
-        "name": "工程建模工作台维护",
-        "code": "ENGINEERING_WORKBENCH_WRITE",
-        "resource": "/engineering/workbench",
+        "name": "产品维护",
+        "code": "ENGINEERING_PRODUCTS_WRITE",
+        "resource": "/engineering/products",
         "action": "write",
-        "description": "编辑BOM树和工艺路线",
+        "description": "新建和编辑产品",
+        "parent_code": "ENGINEERING_PRODUCTS_READ",
     },
     {
-        "name": "工程建模工作台删除",
-        "code": "ENGINEERING_WORKBENCH_DELETE",
-        "resource": "/engineering/workbench",
+        "name": "产品删除",
+        "code": "ENGINEERING_PRODUCTS_DELETE",
+        "resource": "/engineering/products",
         "action": "delete",
-        "description": "删除BOM节点和工艺路线",
+        "description": "删除产品",
+        "parent_code": "ENGINEERING_PRODUCTS_READ",
     },
     {
-        "name": "BOM节点查看",
+        "name": "设计方案管理",
+        "code": "ENGINEERING_SCHEMES_READ",
+        "resource": "/engineering/schemes",
+        "action": "read",
+        "description": "产品方案池页面下的设计方案资源，对应表 eng_design_scheme",
+        "parent_code": "ENGINEERING_PROJECTS_READ",
+    },
+    {
+        "name": "设计方案维护",
+        "code": "ENGINEERING_SCHEMES_WRITE",
+        "resource": "/engineering/schemes",
+        "action": "write",
+        "description": "新建和编辑设计方案",
+        "parent_code": "ENGINEERING_SCHEMES_READ",
+    },
+    {
+        "name": "设计方案删除",
+        "code": "ENGINEERING_SCHEMES_DELETE",
+        "resource": "/engineering/schemes",
+        "action": "delete",
+        "description": "删除设计方案",
+        "parent_code": "ENGINEERING_SCHEMES_READ",
+    },
+    {
+        "name": "方案版本管理",
+        "code": "ENGINEERING_SCHEME_VERSIONS_READ",
+        "resource": "/engineering/scheme-versions",
+        "action": "read",
+        "description": "产品方案池页面下的方案版本资源，对应表 eng_design_scheme_version",
+        "parent_code": "ENGINEERING_PROJECTS_READ",
+    },
+    {
+        "name": "方案版本维护",
+        "code": "ENGINEERING_SCHEME_VERSIONS_WRITE",
+        "resource": "/engineering/scheme-versions",
+        "action": "write",
+        "description": "新建、编辑和发布方案版本",
+        "parent_code": "ENGINEERING_SCHEME_VERSIONS_READ",
+    },
+    {
+        "name": "方案版本删除",
+        "code": "ENGINEERING_SCHEME_VERSIONS_DELETE",
+        "resource": "/engineering/scheme-versions",
+        "action": "delete",
+        "description": "删除方案版本",
+        "parent_code": "ENGINEERING_SCHEME_VERSIONS_READ",
+    },
+    {
+        "name": "BOM节点",
         "code": "ENGINEERING_BOM_NODES_READ",
         "resource": "/engineering/bom-nodes",
         "action": "read",
-        "description": "查看BOM节点列表与详情",
+        "description": "设计要素编排页面下的 BOM 节点资源，对应表 eng_bom_node",
+        "parent_code": "PAGE_03_02_WORKBENCH",
     },
     {
         "name": "BOM节点维护",
         "code": "ENGINEERING_BOM_NODES_WRITE",
         "resource": "/engineering/bom-nodes",
         "action": "write",
-        "description": "新建和编辑BOM节点",
+        "description": "新增和编辑 BOM 节点",
+        "parent_code": "ENGINEERING_BOM_NODES_READ",
     },
     {
         "name": "BOM节点删除",
         "code": "ENGINEERING_BOM_NODES_DELETE",
         "resource": "/engineering/bom-nodes",
         "action": "delete",
-        "description": "删除BOM节点",
+        "description": "删除 BOM 节点",
+        "parent_code": "ENGINEERING_BOM_NODES_READ",
     },
     {
-        "name": "工艺路线查看",
+        "name": "工艺路线",
         "code": "ENGINEERING_PROCESS_ROUTES_READ",
         "resource": "/engineering/process-routes",
         "action": "read",
-        "description": "查看工艺路线列表与详情",
+        "description": "设计要素编排页面下的工艺路线资源，对应表 eng_component_process_route",
+        "parent_code": "PAGE_03_02_WORKBENCH",
     },
     {
         "name": "工艺路线维护",
         "code": "ENGINEERING_PROCESS_ROUTES_WRITE",
         "resource": "/engineering/process-routes",
         "action": "write",
-        "description": "新建和编辑工艺路线",
+        "description": "新增和编辑工艺路线",
+        "parent_code": "ENGINEERING_PROCESS_ROUTES_READ",
     },
     {
         "name": "工艺路线删除",
@@ -351,53 +584,131 @@ _SYSTEM_PERMISSION_SEEDS = [
         "resource": "/engineering/process-routes",
         "action": "delete",
         "description": "删除工艺路线",
+        "parent_code": "ENGINEERING_PROCESS_ROUTES_READ",
     },
     {
-        "name": "路线步骤查看",
+        "name": "工序步骤与资源覆写",
         "code": "ENGINEERING_ROUTE_STEPS_READ",
         "resource": "/engineering/route-steps",
         "action": "read",
-        "description": "查看路线步骤列表与详情",
+        "description": "设计要素编排页面下的工序步骤资源，对应表 eng_route_step_bind",
+        "parent_code": "PAGE_03_02_WORKBENCH",
     },
     {
-        "name": "路线步骤维护",
+        "name": "工序步骤维护",
         "code": "ENGINEERING_ROUTE_STEPS_WRITE",
         "resource": "/engineering/route-steps",
         "action": "write",
-        "description": "新建和编辑路线步骤",
+        "description": "新增、编辑和排序工序步骤",
+        "parent_code": "ENGINEERING_ROUTE_STEPS_READ",
     },
     {
-        "name": "路线步骤删除",
+        "name": "工序步骤删除",
         "code": "ENGINEERING_ROUTE_STEPS_DELETE",
         "resource": "/engineering/route-steps",
         "action": "delete",
-        "description": "删除路线步骤",
+        "description": "删除工序步骤",
+        "parent_code": "ENGINEERING_ROUTE_STEPS_READ",
     },
     {
-        "name": "模型快照查看",
+        "name": "全景快照中心",
         "code": "ENGINEERING_SNAPSHOTS_READ",
         "resource": "/engineering/snapshots",
         "action": "read",
-        "description": "查看模型快照列表与详情",
+        "description": "产品快照中心下的全景快照资源，对应表 eng_model_snapshot",
+        "parent_code": "PAGE_04_02_SNAPSHOT_CENTER",
     },
     {
-        "name": "模型快照维护",
+        "name": "全景快照维护",
         "code": "ENGINEERING_SNAPSHOTS_WRITE",
         "resource": "/engineering/snapshots",
         "action": "write",
-        "description": "生成和管理模型快照",
+        "description": "生成、编辑快照及快照升版",
+        "parent_code": "ENGINEERING_SNAPSHOTS_READ",
     },
     {
-        "name": "模型快照删除",
+        "name": "全景快照删除",
         "code": "ENGINEERING_SNAPSHOTS_DELETE",
         "resource": "/engineering/snapshots",
         "action": "delete",
-        "description": "删除模型快照",
+        "description": "删除全景快照",
+        "parent_code": "ENGINEERING_SNAPSHOTS_READ",
     },
 ]
 
+_COSTING_PERMISSION_SEEDS = [
+    {
+        "name": "静态成本台账查看",
+        "code": "COSTING_STATIC_READ",
+        "resource": "/costing/static",
+        "action": "read",
+        "description": "查看静态成本台账明细",
+        "parent_code": "PAGE_04_03_DECISION_CENTER",
+    },
+    {
+        "name": "财务评估标准",
+        "code": "COSTING_LCC_FINANCIAL_BASELINES_READ",
+        "resource": "/costing/lcc-financial-baselines",
+        "action": "read",
+        "description": "页面权限：财务评估标准，对应前端路由 /costing/lcc-financial-baselines，对应表 eng_lcc_financial_baseline",
+        "parent_code": "MENU_04_COSTING_DECISION",
+    },
+    {
+        "name": "LCC财务评估标准维护",
+        "code": "COSTING_LCC_FINANCIAL_BASELINES_WRITE",
+        "resource": "/costing/lcc-financial-baselines",
+        "action": "write",
+        "description": "新建和编辑 LCC 财务评估标准",
+        "parent_code": "COSTING_LCC_FINANCIAL_BASELINES_READ",
+    },
+    {
+        "name": "LCC财务评估标准删除",
+        "code": "COSTING_LCC_FINANCIAL_BASELINES_DELETE",
+        "resource": "/costing/lcc-financial-baselines",
+        "action": "delete",
+        "description": "删除 LCC 财务评估标准",
+        "parent_code": "COSTING_LCC_FINANCIAL_BASELINES_READ",
+    },
+]
+
+_ALL_PERMISSION_SEEDS = [
+    *_MENU_PERMISSION_SEEDS,
+    *_SYSTEM_PERMISSION_SEEDS,
+    *_MASTER_DATA_PERMISSION_SEEDS,
+    *_ENGINEERING_PERMISSION_SEEDS,
+    *_COSTING_PERMISSION_SEEDS,
+]
+
+_OBSOLETE_PERMISSION_MIGRATIONS = {
+    "ENGINEERING_WORKBENCH_READ": [
+        "PAGE_03_02_WORKBENCH",
+        "ENGINEERING_BOM_NODES_READ",
+        "ENGINEERING_PROCESS_ROUTES_READ",
+        "ENGINEERING_ROUTE_STEPS_READ",
+    ],
+    "ENGINEERING_WORKBENCH_WRITE": [
+        "ENGINEERING_BOM_NODES_WRITE",
+        "ENGINEERING_PROCESS_ROUTES_WRITE",
+        "ENGINEERING_ROUTE_STEPS_WRITE",
+    ],
+    "ENGINEERING_WORKBENCH_DELETE": [
+        "ENGINEERING_BOM_NODES_DELETE",
+        "ENGINEERING_PROCESS_ROUTES_DELETE",
+        "ENGINEERING_ROUTE_STEPS_DELETE",
+    ],
+    "COSTING_SNAPSHOT_CENTER_READ": [
+        "PAGE_04_02_SNAPSHOT_CENTER",
+        "ENGINEERING_SNAPSHOTS_READ",
+    ],
+    "COSTING_SNAPSHOT_CENTER_WRITE": [
+        "ENGINEERING_SNAPSHOTS_WRITE",
+    ],
+    "COSTING_SNAPSHOT_CENTER_DELETE": [
+        "ENGINEERING_SNAPSHOTS_DELETE",
+    ],
+}
+
 _BUILTIN_ROLE_PERMISSIONS = {
-    "SUPER_ADMIN": [permission["code"] for permission in _SYSTEM_PERMISSION_SEEDS],
     "SYSTEM_ADMIN": [permission["code"] for permission in _SYSTEM_PERMISSION_SEEDS],
     "SYSTEM_AUDITOR": ["SYSTEM_AUDIT_LOGS_READ"],
 }
@@ -447,12 +758,6 @@ _PERMISSION_NAME_BY_CODE = {
     "SYSTEM_DICTIONARIES_READ": "数据字典查看",
     "SYSTEM_DICTIONARIES_WRITE": "数据字典维护",
     "SYSTEM_DICTIONARIES_DELETE": "数据字典删除",
-    "MASTER_DATA_LABOR_READ": "人员工时查看",
-    "MASTER_DATA_LABOR_WRITE": "人员工时维护",
-    "MASTER_DATA_LABOR_DELETE": "人员工时删除",
-    "MASTER_DATA_ENERGY_READ": "能源日历查看",
-    "MASTER_DATA_ENERGY_WRITE": "能源日历维护",
-    "MASTER_DATA_ENERGY_DELETE": "能源日历删除",
 }
 
 _PERMISSION_DESCRIPTION_BY_CODE = {
@@ -463,12 +768,6 @@ _PERMISSION_DESCRIPTION_BY_CODE = {
     "SYSTEM_DICTIONARIES_READ": "允许查看系统级数据字典",
     "SYSTEM_DICTIONARIES_WRITE": "允许维护系统级数据字典",
     "SYSTEM_DICTIONARIES_DELETE": "允许删除系统级数据字典",
-    "MASTER_DATA_LABOR_READ": "允许查询人员工时与技能列表",
-    "MASTER_DATA_LABOR_WRITE": "允许新增、编辑人员工时信息",
-    "MASTER_DATA_LABOR_DELETE": "允许删除人员工时信息",
-    "MASTER_DATA_ENERGY_READ": "允许查询能源日历与单位费率",
-    "MASTER_DATA_ENERGY_WRITE": "允许新增、编辑能源日历时间段与费率",
-    "MASTER_DATA_ENERGY_DELETE": "允许删除能源配置项",
 }
 
 _SYSTEM_DICT_TYPE_SEEDS = [
@@ -700,7 +999,7 @@ def _ensure_root_department(db: Session) -> OrgDepartment:
     return dept
 
 
-def _ensure_permission(db: Session, seed: dict[str, str]) -> SysPermission:
+def _ensure_permission(db: Session, seed: dict[str, str | None]) -> SysPermission:
     permission = db.execute(
         select(SysPermission).where(
             SysPermission.code == seed["code"],
@@ -710,7 +1009,11 @@ def _ensure_permission(db: Session, seed: dict[str, str]) -> SysPermission:
 
     if permission is None:
         permission = SysPermission(
-            **seed,
+            name=str(seed["name"]),
+            code=str(seed["code"]),
+            resource=str(seed["resource"]),
+            action=str(seed["action"]),
+            description=seed.get("description"),
             created_by="system",
             updated_by="system",
         )
@@ -721,8 +1024,8 @@ def _ensure_permission(db: Session, seed: dict[str, str]) -> SysPermission:
 
     changed = False
     for field in ("name", "resource", "action", "description"):
-        if getattr(permission, field) != seed[field]:
-            setattr(permission, field, seed[field])
+        if getattr(permission, field) != seed.get(field):
+            setattr(permission, field, seed.get(field))
             changed = True
     if changed:
         permission.updated_by = "system"
@@ -734,11 +1037,22 @@ def _ensure_permission(db: Session, seed: dict[str, str]) -> SysPermission:
     return permission
 
 
-def _ensure_system_permissions(db: Session) -> dict[str, SysPermission]:
+def _ensure_permissions(db: Session) -> dict[str, SysPermission]:
     permissions: dict[str, SysPermission] = {}
-    for seed in _SYSTEM_PERMISSION_SEEDS:
+    for seed in _ALL_PERMISSION_SEEDS:
         permission = _ensure_permission(db, seed)
         permissions[permission.code] = permission
+
+    for seed in _ALL_PERMISSION_SEEDS:
+        permission = permissions[str(seed["code"])]
+        parent_code = seed.get("parent_code")
+        parent_id = permissions[str(parent_code)].id if parent_code else None
+        if permission.parent_id != parent_id:
+            permission.parent_id = parent_id
+            permission.updated_by = "system"
+            db.flush()
+            print(f"  [~] 更新权限层级：{permission.code} -> {parent_code or 'ROOT'}")
+
     return permissions
 
 
@@ -829,6 +1143,14 @@ def _ensure_user_role_binding(db: Session, user: SysUser, role: SysRole) -> None
         print(f"  [=] 角色绑定已存在，跳过：{user.username} → {role.code}")
 
 
+def _build_deleted_permission_code(code: str, permission_id: int) -> str:
+    suffix = f"__deleted__{permission_id}"
+    keep_length = 100 - len(suffix)
+    if keep_length <= 0:
+        return suffix[-100:]
+    return f"{code[:keep_length]}{suffix}"
+
+
 def _ensure_role_permission_binding(db: Session, role: SysRole, permission: SysPermission) -> None:
     binding = db.execute(
         select(SysRolePermission).where(
@@ -849,6 +1171,58 @@ def _ensure_role_permission_binding(db: Session, role: SysRole, permission: SysP
         print(f"  [+] 绑定权限：{role.code} → {permission.code}")
     else:
         print(f"  [=] 权限绑定已存在，跳过：{role.code} → {permission.code}")
+
+
+def _retire_obsolete_permissions(db: Session, permissions: dict[str, SysPermission]) -> None:
+    for obsolete_code, replacement_codes in _OBSOLETE_PERMISSION_MIGRATIONS.items():
+        obsolete_permission = db.execute(
+            select(SysPermission).where(
+                SysPermission.code == obsolete_code,
+                SysPermission.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+
+        if obsolete_permission is None:
+            continue
+
+        role_ids = db.execute(
+            select(SysRolePermission.role_id).where(
+                SysRolePermission.permission_id == obsolete_permission.id,
+            )
+        ).scalars().all()
+
+        if role_ids:
+            roles = db.execute(
+                select(SysRole).where(
+                    SysRole.id.in_(role_ids),
+                    SysRole.is_deleted == False,
+                )
+            ).scalars().all()
+            role_map = {role.id: role for role in roles}
+
+            for role_id in role_ids:
+                role = role_map.get(role_id)
+                if role is None:
+                    continue
+                for replacement_code in replacement_codes:
+                    replacement_permission = permissions.get(replacement_code)
+                    if replacement_permission is not None:
+                        _ensure_role_permission_binding(db, role, replacement_permission)
+
+        stale_bindings = db.execute(
+            select(SysRolePermission).where(
+                SysRolePermission.permission_id == obsolete_permission.id,
+            )
+        ).scalars().all()
+        for binding in stale_bindings:
+            db.delete(binding)
+        db.flush()
+
+        obsolete_permission.code = _build_deleted_permission_code(obsolete_permission.code, obsolete_permission.id)
+        obsolete_permission.is_deleted = True
+        obsolete_permission.updated_by = "system"
+        db.flush()
+        print(f"  [~] 废弃旧权限：{obsolete_code}")
 
 
 def _ensure_builtin_role_permissions(
@@ -1400,8 +1774,9 @@ def run_seed() -> None:
         db.commit()
         print("  [OK] 已提交")
 
-        print("\n[Step 2] 初始化模块六权限点...")
-        permissions = _ensure_system_permissions(db)
+        print("\n[Step 2] 初始化全站权限点与菜单树...")
+        permissions = _ensure_permissions(db)
+        _retire_obsolete_permissions(db, permissions)
         db.commit()
         print("  [OK] 已提交")
 

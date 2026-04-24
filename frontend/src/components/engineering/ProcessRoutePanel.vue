@@ -71,6 +71,7 @@
           type="primary" 
           size="large"
           :icon="Plus"
+          :disabled="!isCurrentVersionEditable"
           @click="handleAddFirstProcess"
         >
           + 添加首道标准工序
@@ -89,6 +90,7 @@
           :data="routeSteps"
           highlight-current-row
           @current-change="handleCurrentChange"
+          @row-click="handleRowClick"
           style="width: 100%"
         >
           <el-table-column type="index" label="序号" width="60" align="center" />
@@ -122,7 +124,7 @@
                 link 
                 type="primary" 
                 size="small"
-                :disabled="$index === 0"
+                :disabled="!isCurrentVersionEditable || $index === 0"
                 @click="handleMoveUp($index)"
               >
                 上移
@@ -131,7 +133,7 @@
                 link 
                 type="primary" 
                 size="small"
-                :disabled="$index === routeSteps.length - 1"
+                :disabled="!isCurrentVersionEditable || $index === routeSteps.length - 1"
                 @click="handleMoveDown($index)"
               >
                 下移
@@ -140,6 +142,7 @@
                 link 
                 type="danger" 
                 size="small"
+                :disabled="!isCurrentVersionEditable"
                 @click="handleDelete(row)"
               >
                 删除
@@ -202,7 +205,7 @@
       
       <template #footer>
         <el-button @click="createRouteVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createRouteLoading" @click="handleCreateRouteSubmit">
+        <el-button type="primary" :loading="createRouteLoading" :disabled="!isCurrentVersionEditable" @click="handleCreateRouteSubmit">
           确定
         </el-button>
       </template>
@@ -228,12 +231,13 @@ const routeSteps = computed(() => store.routeSteps)
 const routesLoading = computed(() => store.routesLoading)
 const stepsLoading = computed(() => store.stepsLoading)
 const selectedRoute = computed(() => store.selectedRoute)
+const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
 
 const selectedRouteId = ref<number | null>(null)
 const isFirstProcess = ref(false)
 
 const canCreateRoute = computed(() => {
-  return hasSelectedBomNode.value && selectedBomNode.value?.node_type === 'PART'
+  return hasSelectedBomNode.value && selectedBomNode.value?.node_type === 'PART' && isCurrentVersionEditable.value
 })
 
 const canAddProcess = computed(() => {
@@ -288,12 +292,24 @@ function handleCurrentChange(currentRow: RouteStepBindWithProcess | null) {
   store.selectStep(currentRow)
 }
 
+function handleRowClick(row: RouteStepBindWithProcess) {
+  store.selectStep(row)
+}
+
 function handleAddProcess() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   isFirstProcess.value = false
   selectorVisible.value = true
 }
 
 function handleAddFirstProcess() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   isFirstProcess.value = true
   selectorVisible.value = true
 }
@@ -313,6 +329,10 @@ async function handleProcessSelect(processId: number) {
 }
 
 function handleCreateRoute() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   routeForm.value = {
     route_name: '',
     route_code: '',
@@ -322,6 +342,10 @@ function handleCreateRoute() {
 }
 
 async function handleCreateRouteSubmit() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   if (!routeFormRef.value) return
   
   try {
@@ -347,6 +371,10 @@ async function handleCreateRouteSubmit() {
 }
 
 async function handleMoveUp(index: number) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   if (index === 0) return
   
   const newSteps = [...routeSteps.value]
@@ -359,6 +387,10 @@ async function handleMoveUp(index: number) {
 }
 
 async function handleMoveDown(index: number) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   if (index === routeSteps.value.length - 1) return
   
   const newSteps = [...routeSteps.value]
@@ -371,6 +403,10 @@ async function handleMoveDown(index: number) {
 }
 
 async function handleDelete(row: RouteStepBindWithProcess) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       `确定要删除工序 [${row.process?.name || '未知'}] 吗？`,

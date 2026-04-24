@@ -190,7 +190,7 @@ async function loadAllPermissions() {
 }
 
 const actionTagType = (action: PermissionAction) => {
-  return resolveDictionaryTagType(permissionActionOptions.value, action, '')
+  return resolveDictionaryTagType(permissionActionOptions.value, action)
 }
 
 const getActionLabel = (action: PermissionAction) => {

@@ -75,3 +75,71 @@ export interface StaticCostResult {
 export function getStaticCostLedger(snapshotId: number): Promise<AxiosResponse<StaticCostResult>> {
   return request.get(`/costing/static/${snapshotId}`)
 }
+
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  page: number
+  size: number
+  pages: number
+}
+
+export interface LccFinancialBaseline {
+  id: number
+  rule_name: string
+  lifecycle_years: number
+  discount_rate: number
+  corrosion_rate: number
+  risk_strategy: 'FIXED' | 'PERCENTAGE'
+  risk_value: number
+  eol_salvage_rate: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  created_by: string | null
+  updated_by: string | null
+}
+
+export interface LccFinancialBaselineQuery {
+  keyword?: string
+  risk_strategy?: LccFinancialBaseline['risk_strategy']
+  is_active?: boolean
+  page?: number
+  size?: number
+}
+
+export interface LccFinancialBaselineCreate {
+  rule_name: string
+  lifecycle_years: number
+  discount_rate: number
+  corrosion_rate: number
+  risk_strategy: LccFinancialBaseline['risk_strategy']
+  risk_value: number
+  eol_salvage_rate: number
+  is_active?: boolean
+}
+
+export type LccFinancialBaselineUpdate = Partial<LccFinancialBaselineCreate>
+
+export const lccFinancialBaselineApi = {
+  list: (params: LccFinancialBaselineQuery): Promise<AxiosResponse<PageResult<LccFinancialBaseline>>> =>
+    request.get('/costing/lcc-financial-baselines', { params }),
+
+  detail: (id: number): Promise<AxiosResponse<LccFinancialBaseline>> =>
+    request.get(`/costing/lcc-financial-baselines/${id}`),
+
+  create: (data: LccFinancialBaselineCreate): Promise<AxiosResponse<LccFinancialBaseline>> =>
+    request.post('/costing/lcc-financial-baselines', data),
+
+  update: (id: number, data: LccFinancialBaselineUpdate): Promise<AxiosResponse<LccFinancialBaseline>> =>
+    request.put(`/costing/lcc-financial-baselines/${id}`, data),
+
+  remove: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/costing/lcc-financial-baselines/${id}`),
+}
+
+export function getLccBaselines(
+  params: LccFinancialBaselineQuery = { is_active: true, page: 1, size: 200 },
+): Promise<AxiosResponse<PageResult<LccFinancialBaseline>>> {
+  return lccFinancialBaselineApi.list(params)
+}

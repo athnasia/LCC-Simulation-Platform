@@ -134,7 +134,7 @@ const rules: FormRules = {
 const permissionTree = computed<PermissionTreeNode[]>(() => buildPermissionTree(props.allPermissions))
 
 const actionTagType = (action: PermissionAction) => {
-  return resolveDictionaryTagType(permissionActionOptions.value, action, '')
+  return resolveDictionaryTagType(permissionActionOptions.value, action)
 }
 
 const getActionLabel = (action: PermissionAction) => {

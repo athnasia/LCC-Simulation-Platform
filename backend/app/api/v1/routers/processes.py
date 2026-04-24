@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_active_user, get_db, require_permission
+from app.core.dependencies import get_db, require_permission
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     ProcessCloneRequest,
@@ -30,7 +30,7 @@ def list_processes(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/processes", "read")),
 ):
     return ProcessService(db).list(
         keyword=keyword,
@@ -65,7 +65,7 @@ def create_process(
 def get_process(
     process_id: int,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/processes", "read")),
 ):
     return ProcessService(db).get(process_id)
 

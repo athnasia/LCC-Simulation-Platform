@@ -265,6 +265,25 @@ class PermissionService:
         if self.db.execute(stmt).scalar_one_or_none() is not None:
             raise BusinessRuleViolationError(message=f"权限编码「{code}」已存在")
 
+    def _assert_no_cycle(self, perm_id: int, parent_id: int) -> None:
+        ancestor = self._get_or_404(parent_id)
+        visited_ids = {perm_id}
+
+        while ancestor is not None:
+            if ancestor.id in visited_ids:
+                raise BusinessRuleViolationError(message="权限层级不能形成循环父子关系")
+            visited_ids.add(ancestor.id)
+
+            if ancestor.parent_id is None:
+                break
+
+            ancestor = self.db.execute(
+                select(SysPermission).where(
+                    SysPermission.id == ancestor.parent_id,
+                    SysPermission.is_deleted == False,
+                )
+            ).scalar_one_or_none()
+
     def list(
         self,
         *,
@@ -327,6 +346,9 @@ class PermissionService:
             self._assert_code_unique(payload.code, exclude_id=perm_id)
         if payload.parent_id is not None and payload.parent_id == perm_id:
             raise BusinessRuleViolationError(message="权限节点不能将自身设为父节点")
+        if payload.parent_id is not None and payload.parent_id != perm.parent_id:
+            self._get_or_404(payload.parent_id)
+            self._assert_no_cycle(perm_id, payload.parent_id)
 
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(perm, field, value)

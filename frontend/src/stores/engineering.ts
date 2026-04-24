@@ -133,6 +133,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   const hasSelectedBomNode = computed(() => !!selectedBomNode.value)
   const hasSelectedRoute = computed(() => !!selectedRoute.value)
   const hasCurrentSchemeVersion = computed(() => !!currentSchemeVersion.value)
+  const isCurrentVersionEditable = computed(() => {
+    const status = currentSchemeVersion.value?.status
+    return !!currentSchemeVersion.value && status !== 'RELEASED' && status !== 'ARCHIVED'
+  })
 
   // 当前 BOM 节点是否已配置工艺路线
   const isCurrentNodeConfigured = computed(() => {
@@ -163,6 +167,22 @@ export const useEngineeringStore = defineStore('engineering', () => {
   const canGenerateSnapshot = computed(() => {
     return hasCurrentSchemeVersion.value && bomTree.value.length > 0 && isAllLeafNodesConfigured.value
   })
+
+  function ensureCurrentVersionEditable(action: string): boolean {
+    if (!currentSchemeVersion.value) {
+      ElMessage.warning('请先选择方案版本')
+      return false
+    }
+
+    if (isCurrentVersionEditable.value) {
+      return true
+    }
+
+    ElMessage.warning(
+      `当前版本 V${currentSchemeVersion.value.version} 已发布或归档，不能${action}。请先创建新的草稿版本。`,
+    )
+    return false
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // Actions - 项目管理
@@ -258,14 +278,15 @@ export const useEngineeringStore = defineStore('engineering', () => {
     try {
       const res = await designSchemeVersionApi.detail(versionId)
       currentSchemeVersion.value = res.data
-      
-      // 切换版本后，重新加载 BOM 树
-      await loadBomTree(versionId)
-      
-      // 清空选中的节点和路线
+
+      processRoutes.value = []
       selectedBomNode.value = null
       selectedRoute.value = null
       routeSteps.value = []
+      selectedStep.value = null
+      
+      // 切换版本后，重新加载 BOM 树
+      await loadBomTree(versionId)
     } catch (error) {
       console.error('Failed to switch version:', error)
       ElMessage.error('切换版本失败')
@@ -291,14 +312,16 @@ export const useEngineeringStore = defineStore('engineering', () => {
 
   async function selectBomNode(node: BomNode) {
     selectedBomNode.value = node
+    selectedRoute.value = null
+    routeSteps.value = []
+    selectedStep.value = null
     
     // 选中节点后，加载该节点的工艺路线
     await loadProcessRoutes(node.id)
   }
 
   async function createBomNode(data: Partial<BomNode>) {
-    if (!currentSchemeVersion.value) {
-      ElMessage.warning('请先选择方案版本')
+    if (!ensureCurrentVersionEditable('新增 BOM 节点')) {
       return
     }
 
@@ -321,6 +344,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function updateBomNode(nodeId: number, data: Partial<BomNode>) {
+    if (!ensureCurrentVersionEditable('修改 BOM 节点')) {
+      return
+    }
+
     try {
       const res = await bomNodeApi.update(nodeId, data)
       
@@ -339,6 +366,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function deleteBomNode(nodeId: number) {
+    if (!ensureCurrentVersionEditable('删除 BOM 节点')) {
+      return
+    }
+
     try {
       await bomNodeApi.remove(nodeId)
       
@@ -352,8 +383,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
       // 如果删除的是当前选中的节点，清空选中状态
       if (selectedBomNode.value?.id === nodeId) {
         selectedBomNode.value = null
+        processRoutes.value = []
         selectedRoute.value = null
         routeSteps.value = []
+        selectedStep.value = null
       }
     } catch (error) {
       console.error('Failed to delete BOM node:', error)
@@ -370,14 +403,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
     try {
       const res = await componentProcessRouteApi.list({ bom_node_id: bomNodeId, size: 100 })
       processRoutes.value = res.data.items || []
-      
-      // 如果有路线，默认选中第一条
-      if (processRoutes.value.length > 0) {
-        await selectRoute(processRoutes.value[0])
-      } else {
-        selectedRoute.value = null
-        routeSteps.value = []
-      }
+
+      selectedRoute.value = null
+      routeSteps.value = []
+      selectedStep.value = null
     } catch (error) {
       console.error('Failed to load process routes:', error)
       ElMessage.error('加载工艺路线失败')
@@ -394,6 +423,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function createProcessRoute(data: Partial<ComponentProcessRoute>) {
+    if (!ensureCurrentVersionEditable('新增工艺路线')) {
+      return
+    }
+
     if (!selectedBomNode.value) {
       ElMessage.warning('请先选择 BOM 节点')
       return
@@ -421,6 +454,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function deleteProcessRoute(routeId: number) {
+    if (!ensureCurrentVersionEditable('删除工艺路线')) {
+      return
+    }
+
     try {
       await componentProcessRouteApi.remove(routeId)
       
@@ -445,8 +482,6 @@ export const useEngineeringStore = defineStore('engineering', () => {
     try {
       const res = await routeStepBindApi.listWithProcess(routeId)
       routeSteps.value = res.data
-      
-      // 清空选中的步骤
       selectedStep.value = null
     } catch (error) {
       console.error('Failed to load route steps:', error)
@@ -461,6 +496,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function addRouteStep(processId: number) {
+    if (!ensureCurrentVersionEditable('新增工序步骤')) {
+      return
+    }
+
     if (!selectedRoute.value) {
       ElMessage.warning('请先选择工艺路线')
       return
@@ -488,6 +527,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function addFirstProcessWithDefaultRoute(processId: number) {
+    if (!ensureCurrentVersionEditable('新增工序步骤')) {
+      return
+    }
+
     if (!selectedBomNode.value) {
       ElMessage.warning('请先选择 BOM 节点')
       return
@@ -528,6 +571,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function updateRouteStep(stepId: number, data: Partial<RouteStepBind>) {
+    if (!ensureCurrentVersionEditable('修改资源参数覆写')) {
+      return
+    }
+
     try {
       const res = await routeStepBindApi.update(stepId, data)
       
@@ -546,6 +593,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function deleteRouteStep(stepId: number) {
+    if (!ensureCurrentVersionEditable('删除工序步骤')) {
+      return
+    }
+
     try {
       await routeStepBindApi.remove(stepId)
       
@@ -562,6 +613,10 @@ export const useEngineeringStore = defineStore('engineering', () => {
   }
 
   async function reorderRouteSteps(stepIds: number[]) {
+    if (!ensureCurrentVersionEditable('调整工序顺序')) {
+      return
+    }
+
     if (!selectedRoute.value) {
       return
     }
@@ -679,6 +734,7 @@ export const useEngineeringStore = defineStore('engineering', () => {
     hasSelectedBomNode,
     hasSelectedRoute,
     hasCurrentSchemeVersion,
+    isCurrentVersionEditable,
     isCurrentNodeConfigured,
     isAllLeafNodesConfigured,
     leafNodeStats,

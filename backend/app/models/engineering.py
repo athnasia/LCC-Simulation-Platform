@@ -302,6 +302,41 @@ class EngRouteStepBind(AuditMixin, Base):
     equipment: Mapped["MdEquipment | None"] = relationship("MdEquipment")
 
 
+# ── LCC 财务评估基准 ───────────────────────────────────────────────────────────────
+
+class LccFinancialBaseline(AuditMixin, Base):
+    __tablename__ = "eng_lcc_financial_baseline"
+    __table_args__ = (
+        UniqueConstraint(
+            "rule_name", "is_deleted",
+            name="uq_eng_lcc_financial_baseline_name_deleted"
+        ),
+    )
+
+    rule_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="规则名称")
+    lifecycle_years: Mapped[int] = mapped_column(
+        Integer, default=15, server_default="15", nullable=False, comment="生命周期设定（年）"
+    )
+    discount_rate: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), default=Decimal("10.0000"), server_default="10.0000", nullable=False, comment="资金折现率/WACC（%）"
+    )
+    corrosion_rate: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), default=Decimal("4.0000"), server_default="4.0000", nullable=False, comment="维保年度递增率（%）"
+    )
+    risk_strategy: Mapped[str] = mapped_column(
+        String(20), default="FIXED", server_default="FIXED", nullable=False, comment="风险拨备策略（FIXED/PERCENTAGE）"
+    )
+    risk_value: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), default=Decimal("0.0000"), server_default="0.0000", nullable=False, comment="风险拨备数值"
+    )
+    eol_salvage_rate: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), default=Decimal("0.0000"), server_default="0.0000", nullable=False, comment="期末残值率（%）"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False, comment="是否启用"
+    )
+
+
 # ── 模型快照 ───────────────────────────────────────────────────────────────────────────
 
 class EngModelSnapshot(AuditMixin, Base):

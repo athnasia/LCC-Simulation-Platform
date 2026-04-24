@@ -6,7 +6,7 @@
       <el-button 
         type="primary" 
         size="small" 
-        :disabled="!hasCurrentSchemeVersion"
+        :disabled="!hasCurrentSchemeVersion || !isCurrentVersionEditable"
         @click="handleAddRootNode"
       >
         新增根节点
@@ -56,6 +56,7 @@
                 link 
                 type="primary" 
                 size="small"
+                :disabled="!isCurrentVersionEditable"
                 @click.stop="handleAddChild(data)"
               >
                 新增子级
@@ -64,6 +65,7 @@
                 link 
                 type="primary" 
                 size="small"
+                :disabled="!isCurrentVersionEditable"
                 @click.stop="handleEdit(data)"
               >
                 编辑
@@ -72,6 +74,7 @@
                 link 
                 type="danger" 
                 size="small"
+                :disabled="!isCurrentVersionEditable"
                 @click.stop="handleDelete(data)"
               >
                 删除
@@ -122,6 +125,7 @@ const treeProps = {
 // 从 Store 获取状态
 const bomTree = computed(() => store.bomTree)
 const hasCurrentSchemeVersion = computed(() => store.hasCurrentSchemeVersion)
+const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
 const selectedBomNode = computed(() => store.selectedBomNode)
 
 // 弹窗相关
@@ -137,6 +141,10 @@ function handleNodeClick(data: BomNodeTree) {
 
 // 新增根节点
 function handleAddRootNode() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   dialogMode.value = 'create'
   currentNode.value = null
   currentParentId.value = null
@@ -145,6 +153,10 @@ function handleAddRootNode() {
 
 // 新增子级
 function handleAddChild(node: BomNodeTree) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   dialogMode.value = 'create'
   currentNode.value = null
   currentParentId.value = node.id
@@ -153,6 +165,10 @@ function handleAddChild(node: BomNodeTree) {
 
 // 编辑节点
 function handleEdit(node: BomNodeTree) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   dialogMode.value = 'edit'
   currentNode.value = node
   currentParentId.value = null
@@ -161,6 +177,10 @@ function handleEdit(node: BomNodeTree) {
 
 // 删除节点
 async function handleDelete(node: BomNodeTree) {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       `确定要删除节点 [${node.node_name}] 吗？删除后不可恢复，子节点也会一并删除。`,

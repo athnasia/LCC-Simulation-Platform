@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { AxiosResponse } from 'axios'
 import type { Unit } from './masterData'
+import type { SimulationResult } from './simulation'
 
 // ═══════════════════════════════════════════════════════════════
 // 通用类型
@@ -432,6 +433,7 @@ export interface ModelSnapshot {
   snapshot_code: string
   snapshot_name: string
   snapshot_data: Record<string, unknown>
+  simulation_result?: SimulationResult | null
   status: string
   description: string | null
   created_at: string
@@ -468,6 +470,19 @@ export interface GenerateSnapshotResponse {
   created_at: string
 }
 
+export interface PromoteSnapshotToVersionRequest {
+  description: string
+}
+
+export interface PromoteSnapshotToVersionResponse {
+  snapshot_id: number
+  version_id: number
+  version_number: number
+  status: string
+  description: string | null
+  message: string
+}
+
 export const modelSnapshotApi = {
   list: (params: ModelSnapshotQuery): Promise<AxiosResponse<PageResult<ModelSnapshot>>> =>
     request.get('/engineering/snapshots', { params }),
@@ -486,4 +501,10 @@ export const modelSnapshotApi = {
 
   generate: (data: GenerateSnapshotRequest): Promise<AxiosResponse<GenerateSnapshotResponse>> =>
     request.post('/engineering/snapshots/generate', data),
+
+  promoteToVersion: (
+    snapshotId: number,
+    data: PromoteSnapshotToVersionRequest,
+  ): Promise<AxiosResponse<PromoteSnapshotToVersionResponse>> =>
+    request.post(`/snapshots/${snapshotId}/promote-to-version`, data),
 }

@@ -10,9 +10,13 @@
         description="请在中栏选择一个工序步骤"
         :image-size="120"
       />
+
+      <div v-else-if="!isCurrentVersionEditable" class="readonly-banner">
+        当前方案版本已发布，资源参数覆写仅可查看，不能修改。
+      </div>
       
       <el-form 
-        v-else
+        v-if="selectedStep"
         ref="formRef"
         :model="form"
         label-width="100px"
@@ -36,7 +40,7 @@
         </el-divider>
         
         <el-form-item label="加工方式">
-          <el-radio-group v-model="form.process_type" @change="handleProcessTypeChange">
+          <el-radio-group v-model="form.process_type" :disabled="!isCurrentVersionEditable" @change="handleProcessTypeChange">
             <el-radio value="IN_HOUSE">
               <el-icon><OfficeBuilding /></el-icon>
               厂内自制
@@ -55,6 +59,7 @@
               placeholder="留空则使用标准默认设备"
               clearable
               filterable
+              :disabled="!isCurrentVersionEditable"
               style="width: 100%"
             >
               <el-option
@@ -81,6 +86,7 @@
               :min="0"
               :precision="4"
               :step="0.1"
+              :disabled="!isCurrentVersionEditable"
               placeholder="请输入准备工时"
               style="width: 100%"
             />
@@ -95,6 +101,7 @@
               :min="0"
               :precision="4"
               :step="0.1"
+              :disabled="!isCurrentVersionEditable"
               placeholder="请输入运行工时"
               style="width: 100%"
             />
@@ -115,6 +122,7 @@
               :min="0"
               :precision="2"
               :step="10"
+              :disabled="!isCurrentVersionEditable"
               placeholder="请输入外协单价"
               style="width: 100%"
             />
@@ -144,6 +152,7 @@
                 :min="0"
                 :precision="4"
                 :step="0.1"
+                :disabled="!isCurrentVersionEditable"
                 placeholder="请输入消耗量"
                 style="width: 150px"
               />
@@ -168,6 +177,7 @@
             type="textarea"
             :rows="3"
             placeholder="请输入备注信息"
+            :disabled="!isCurrentVersionEditable"
             maxlength="512"
             show-word-limit
           />
@@ -177,6 +187,7 @@
           <el-button 
             type="primary" 
             :loading="saving"
+            :disabled="!isCurrentVersionEditable"
             @click="handleSave"
           >
             保存参数
@@ -194,6 +205,7 @@ import { OfficeBuilding, Van } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
 import type { RouteStepBindWithProcess } from '@/api/engineering'
+import { materialApi, processApi, type Material } from '@/api/masterData'
 
 interface MaterialItem {
   code: string
@@ -211,10 +223,13 @@ interface EquipmentOption {
 const store = useEngineeringStore()
 
 const selectedStep = computed(() => store.selectedStep)
+const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const saving = ref(false)
+const materialDetailCache = new Map<number, Material>()
+let materialLoadToken = 0
 
 const form = ref({
   process_type: 'IN_HOUSE' as 'IN_HOUSE' | 'OUTSOURCED',
@@ -240,23 +255,15 @@ watch(selectedStep, (newStep) => {
     form.value = {
       process_type: newStep.process_type || 'IN_HOUSE',
       override_equipment_id: newStep.override_equipment_id,
-      outsource_price: newStep.outsource_price,
-      override_t_set: newStep.override_t_set,
-      override_t_run: newStep.override_t_run,
+      outsource_price: toNumberOrNull(newStep.outsource_price),
+      override_t_set: toNumberOrNull(newStep.override_t_set),
+      override_t_run: toNumberOrNull(newStep.override_t_run),
       description: newStep.description || '',
     }
-    
-    if (newStep.override_mat_params) {
-      materialList.value = Object.entries(newStep.override_mat_params).map(([code, quantity]) => ({
-        code,
-        name: getMaterialName(code),
-        quantity: quantity as number,
-        unit: getMaterialUnit(code),
-      }))
-    } else {
-      loadStandardMaterials(newStep)
-    }
+
+    void loadProcessMaterials(newStep)
   } else {
+    materialLoadToken += 1
     form.value = {
       process_type: 'IN_HOUSE',
       override_equipment_id: null,
@@ -269,6 +276,15 @@ watch(selectedStep, (newStep) => {
   }
 }, { immediate: true })
 
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function handleProcessTypeChange() {
   if (form.value.process_type === 'IN_HOUSE') {
     form.value.outsource_price = null
@@ -279,39 +295,51 @@ function handleProcessTypeChange() {
   }
 }
 
-function getMaterialName(code: string): string {
-  const materialNames: Record<string, string> = {
-    'MAT_CUTTING_FLUID': '切削液',
-    'MAT_COPPER_INGOT': '铜锭',
-    'MAT_STEEL_PLATE': '钢板',
-    'MAT_LUBRICANT': '润滑油',
-  }
-  return materialNames[code] || code
-}
-
-function getMaterialUnit(code: string): string {
-  const materialUnits: Record<string, string> = {
-    'MAT_CUTTING_FLUID': 'L',
-    'MAT_COPPER_INGOT': 'kg',
-    'MAT_STEEL_PLATE': 'kg',
-    'MAT_LUBRICANT': 'L',
-  }
-  return materialUnits[code] || '件'
-}
-
-async function loadStandardMaterials(step: RouteStepBindWithProcess) {
+async function loadProcessMaterials(step: RouteStepBindWithProcess) {
+  const token = ++materialLoadToken
   loading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    materialList.value = [
-      { code: 'MAT_CUTTING_FLUID', name: '切削液', quantity: null, unit: 'L' },
-      { code: 'MAT_COPPER_INGOT', name: '铜锭', quantity: null, unit: 'kg' },
-    ]
+    const processRes = await processApi.detail(step.process.id)
+    const materialResources = processRes.data.resources.filter((resource) => resource.resource_type === 'MATERIAL')
+    const overrideMap = step.override_mat_params || {}
+
+    if (materialResources.length === 0) {
+      if (token === materialLoadToken) {
+        materialList.value = []
+      }
+      return
+    }
+
+    const materials = await Promise.all(
+      materialResources.map(async (resource) => {
+        const cached = materialDetailCache.get(resource.resource_id)
+        if (cached) {
+          return cached
+        }
+
+        const detail = await materialApi.detail(resource.resource_id)
+        materialDetailCache.set(resource.resource_id, detail.data)
+        return detail.data
+      }),
+    )
+
+    if (token === materialLoadToken) {
+      materialList.value = materials.map((material) => ({
+        code: material.code,
+        name: material.name,
+        quantity: toNumberOrNull(overrideMap[material.code]),
+        unit: material.consumption_unit?.symbol || material.consumption_unit?.name || material.pricing_unit?.symbol || material.pricing_unit?.name || '件',
+      }))
+    }
   } catch (error) {
-    console.error('Failed to load standard materials:', error)
+    console.error('Failed to load process materials:', error)
+    if (token === materialLoadToken) {
+      materialList.value = []
+    }
   } finally {
-    loading.value = false
+    if (token === materialLoadToken) {
+      loading.value = false
+    }
   }
 }
 
@@ -331,6 +359,10 @@ function buildMaterialParams(): Record<string, number> | null {
 }
 
 async function handleSave() {
+  if (!isCurrentVersionEditable.value) {
+    return
+  }
+
   if (!selectedStep.value) {
     ElMessage.warning('请先选择工序步骤')
     return
@@ -386,6 +418,15 @@ async function handleSave() {
   flex: 1;
   overflow: auto;
   padding: 16px;
+}
+
+.readonly-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #8a5a00;
+  background-color: #fff7e6;
+  border: 1px solid #f5d39c;
 }
 
 .material-params {

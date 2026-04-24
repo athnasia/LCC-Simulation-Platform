@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import require_permission
 from app.core.database import get_db
-from app.core.exceptions import ResourceNotFoundError
+from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
 from app.models.system import SysUser
-from app.models.engineering import EngModelSnapshot
+from app.models.engineering import EngModelSnapshot, LccFinancialBaseline
+from app.schemas.simulation import SimulationStartRequest
 from app.worker.tasks import run_lcc_simulation
 
 router = APIRouter()
@@ -23,11 +24,40 @@ router = APIRouter()
 )
 def start_simulation(
     snapshot_id: int,
+    payload: SimulationStartRequest,
     db: Session = Depends(get_db),
     _: SysUser = Depends(require_permission("/engineering/snapshots", "write")),
 ) -> dict[str, Any]:
-    del db
-    run_lcc_simulation.delay(snapshot_id)
+    if payload.snapshot_id != snapshot_id:
+        raise BusinessRuleViolationError(
+            message="请求体中的 snapshot_id 与路径参数不一致",
+            error_code="SNAPSHOT_ID_MISMATCH",
+            detail={"path_snapshot_id": snapshot_id, "payload_snapshot_id": payload.snapshot_id},
+        )
+
+    snapshot = db.execute(
+        select(EngModelSnapshot).where(
+            EngModelSnapshot.id == snapshot_id,
+            EngModelSnapshot.is_deleted == False,
+        )
+    ).scalar_one_or_none()
+    if snapshot is None:
+        raise ResourceNotFoundError(resource="模型快照", identifier=snapshot_id)
+
+    simulation_payload = payload.to_simulation_payload()
+
+    if payload.baseline_id is not None:
+        baseline = db.execute(
+            select(LccFinancialBaseline).where(
+                LccFinancialBaseline.id == payload.baseline_id,
+                LccFinancialBaseline.is_deleted == False,
+                LccFinancialBaseline.is_active == True,
+            )
+        ).scalar_one_or_none()
+        if baseline is None:
+            raise ResourceNotFoundError(resource="LCC 财务评估基准", identifier=payload.baseline_id)
+
+    run_lcc_simulation.delay(snapshot_id, simulation_payload)
     return {
         "message": "仿真任务已投递",
         "snapshot_id": snapshot_id,

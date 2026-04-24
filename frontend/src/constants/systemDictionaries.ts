@@ -1,6 +1,6 @@
 import type { DictionaryOption } from '@/stores/dictionaries'
 
-export type DictionaryTagType = '' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
+export type DictionaryTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
 export const ATTR_DATA_TYPE_OPTIONS: DictionaryOption[] = [
   { value: 'STRING', label: '字符串', sort_order: 1, extra_json: { input_hint: '文本' } },
@@ -10,17 +10,31 @@ export const ATTR_DATA_TYPE_OPTIONS: DictionaryOption[] = [
   { value: 'DATE', label: '日期', sort_order: 5, extra_json: { input_hint: '日期 (YYYY-MM-DD)' } },
   { value: 'ENUM', label: '枚举', sort_order: 6, extra_json: { input_hint: '枚举值' } },
 ]
+export const LABOR_SKILL_OPTIONS: DictionaryOption[] = [
+  { value: 'JUNIOR', label: '初级', sort_order: 1, extra_json: { tag_type: 'info' } },
+  { value: 'INTERMEDIATE', label: '中级', sort_order: 2, extra_json: { tag_type: 'primary' } },
+  { value: 'SENIOR', label: '高级', sort_order: 3, extra_json: { tag_type: 'warning' } },
+  { value: 'MASTER', label: '专家', sort_order: 4, extra_json: { tag_type: 'danger' } },
+]
+
+export const ENERGY_TYPE_OPTIONS: DictionaryOption[] = [
+  { value: 'ELECTRICITY', label: '电力', sort_order: 1, extra_json: { tag_type: 'primary' } },
+  { value: 'WATER', label: '水', sort_order: 2, extra_json: { tag_type: 'success' } },
+  { value: 'GAS', label: '天然气', sort_order: 3, extra_json: { tag_type: 'warning' } },
+  { value: 'STEAM', label: '蒸汽', sort_order: 4, extra_json: { tag_type: 'danger' } },
+  { value: 'COMPRESSED_AIR', label: '压缩空气', sort_order: 5, extra_json: { tag_type: 'info' } },
+]
 
 export const PERMISSION_ACTION_OPTIONS: DictionaryOption[] = [
   { value: 'read', label: '读取', sort_order: 1, extra_json: { tag_type: 'success' } },
-  { value: 'write', label: '维护', sort_order: 2, extra_json: { tag_type: '' } },
+  { value: 'write', label: '维护', sort_order: 2, extra_json: { tag_type: 'info' } },
   { value: 'delete', label: '删除', sort_order: 3, extra_json: { tag_type: 'danger' } },
   { value: 'admin', label: '管理', sort_order: 4, extra_json: { tag_type: 'warning' } },
 ]
 
 export const AUDIT_ACTION_OPTIONS: DictionaryOption[] = [
   { value: 'CREATE', label: '创建', sort_order: 1, extra_json: { tag_type: 'success' } },
-  { value: 'UPDATE', label: '更新', sort_order: 2, extra_json: { tag_type: '' } },
+  { value: 'UPDATE', label: '更新', sort_order: 2, extra_json: { tag_type: 'info' } },
   { value: 'DELETE', label: '删除', sort_order: 3, extra_json: { tag_type: 'danger' } },
   { value: 'RESET_PASSWORD', label: '重置密码', sort_order: 4, extra_json: { tag_type: 'warning' } },
   { value: 'CHANGE_PASSWORD', label: '修改密码', sort_order: 5, extra_json: { tag_type: 'warning' } },
@@ -33,26 +47,4 @@ export const AUDIT_RESOURCE_TYPE_OPTIONS: DictionaryOption[] = [
   { value: 'SysUser', label: '用户', sort_order: 4, extra_json: null },
   { value: 'SysDictType', label: '字典类型', sort_order: 5, extra_json: null },
   { value: 'SysDictItem', label: '字典项', sort_order: 6, extra_json: null },
-  { value: 'MdMaterial', label: '材料主数据', sort_order: 7, extra_json: { tag_type: 'primary' } },
-  { value: 'MdEquipment', label: '设备能力库', sort_order: 8, extra_json: { tag_type: 'primary' } },
-  { value: 'MdProcess', label: '工艺工时库', sort_order: 9, extra_json: { tag_type: 'primary' } },
-  { value: 'MdProcessResource', label: '工序资源挂载', sort_order: 10, extra_json: { tag_type: 'info' } },
-  { value: 'MdLabor', label: '人员技能矩阵', sort_order: 11, extra_json: { tag_type: 'primary' } },
-  { value: 'MdEnergyRate', label: '能源单价', sort_order: 12, extra_json: { tag_type: 'primary' } },
-  { value: 'MdEnergyCalendar', label: '能源日历', sort_order: 13, extra_json: { tag_type: 'warning' } },
-]
-
-export const LABOR_SKILL_OPTIONS: DictionaryOption[] = [
-  { value: 'JUNIOR', label: '初级', sort_order: 1, extra_json: null },
-  { value: 'INTERMEDIATE', label: '中级', sort_order: 2, extra_json: null },
-  { value: 'SENIOR', label: '高级', sort_order: 3, extra_json: null },
-  { value: 'MASTER', label: '专家', sort_order: 4, extra_json: null },
-]
-
-export const ENERGY_TYPE_OPTIONS: DictionaryOption[] = [
-  { value: 'ELECTRICITY', label: '电', sort_order: 1, extra_json: null },
-  { value: 'WATER', label: '水', sort_order: 2, extra_json: null },
-  { value: 'GAS', label: '气', sort_order: 3, extra_json: null },
-  { value: 'STEAM', label: '蒸汽', sort_order: 4, extra_json: null },
-  { value: 'COMPRESSED_AIR', label: '压缩空气', sort_order: 5, extra_json: null },
 ]

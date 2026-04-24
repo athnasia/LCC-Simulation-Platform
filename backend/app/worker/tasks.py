@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="run_lcc_simulation", bind=True)
-def run_lcc_simulation(self, snapshot_id: int) -> dict[str, Any]:
+def run_lcc_simulation(self, snapshot_id: int, simulation_params: dict[str, Any] | None = None) -> dict[str, Any]:
     db = SessionLocal()
     try:
-        result = SimulationService(db).run_time_stepped_simulation(snapshot_id)
+        result = SimulationService(db).run_time_stepped_simulation(snapshot_id, simulation_params)
         return {
             "task_id": self.request.id,
             "snapshot_id": snapshot_id,

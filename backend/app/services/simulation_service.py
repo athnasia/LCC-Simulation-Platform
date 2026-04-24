@@ -9,13 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError, SimulationError
-from app.models.engineering import EngModelSnapshot
+from app.models.engineering import EngModelSnapshot, LccFinancialBaseline
 from app.models.master_data import EnergyType, MdEnergyRate, MdEquipment
+from app.services.costing_service import CostingService
 
 
 DECIMAL_ZERO = Decimal("0")
 DECIMAL_ONE = Decimal("1")
 MONEY_QUANTIZER = Decimal("0.0001")
+FINANCIAL_QUANTIZER = Decimal("0.01")
+RATIO_QUANTIZER = Decimal("0.000000")
 DEFAULT_EQUIPMENT_RATE = Decimal("50.0")
 DEFAULT_LABOR_RATE = Decimal("80.0")
 DEFAULT_POWER_CONSUMPTION = Decimal("1.0")
@@ -55,12 +58,16 @@ class SimulationService:
     def __init__(self, db: Session):
         self.db = db
 
-    def run_time_stepped_simulation(self, snapshot_id: int) -> dict[str, Any]:
+    def run_time_stepped_simulation(self, snapshot_id: int, simulation_params: dict[str, Any] | None = None) -> dict[str, Any]:
+        if simulation_params and simulation_params.get("baseline_id") not in (None, ""):
+            return self._run_chemical_npv_simulation(snapshot_id, simulation_params)
+
         snapshot = self._lock_snapshot(snapshot_id)
         self._assert_status_available(snapshot)
 
         virtual_clock = self._build_virtual_start_time()
         simulation_started_at = datetime.now()
+        financial_baseline = self._build_financial_baseline_context(simulation_params)
 
         snapshot.status = "SIMULATING"
         snapshot.updated_by = SYSTEM_OPERATOR
@@ -68,6 +75,8 @@ class SimulationService:
             "status": "SIMULATING",
             "started_at": simulation_started_at.isoformat(),
             "snapshot_id": snapshot_id,
+            "simulation_params": simulation_params,
+            "financial_baseline": financial_baseline,
         }
         self.db.commit()
 
@@ -211,6 +220,8 @@ class SimulationService:
             "virtual_finished_at": virtual_clock.isoformat(),
             "started_at": simulation_started_at.isoformat(),
             "finished_at": simulation_finished_at.isoformat(),
+            "simulation_params": simulation_params,
+            "financial_baseline": financial_baseline,
             "energy_context": {
                 "rate_code": "ELEC_INDUSTRIAL",
                 "base_price": self._decimal_to_string(electricity_context.base_price),
@@ -232,6 +243,138 @@ class SimulationService:
                 "outsource_cost": self._decimal_to_string(total_outsource_cost),
             },
             "lcc_total_cost": self._decimal_to_string(lcc_total_cost),
+            "timeline_events": timeline_events,
+        }
+
+        snapshot.status = "COMPLETED"
+        snapshot.updated_by = SYSTEM_OPERATOR
+        snapshot.simulation_result = result
+        self.db.commit()
+        return result
+
+    def _run_chemical_npv_simulation(self, snapshot_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        snapshot = self._lock_snapshot(snapshot_id)
+        self._assert_status_available(snapshot)
+
+        baseline_id = payload.get("baseline_id")
+        if baseline_id in (None, ""):
+            raise BusinessRuleViolationError(
+                message="化工 NPV 仿真缺少 baseline_id",
+                error_code="CHEMICAL_BASELINE_REQUIRED",
+                detail={"snapshot_id": snapshot_id},
+            )
+
+        capex = self._to_financial_decimal(payload.get("capex"))
+        base_mc = self._to_financial_decimal(payload.get("base_mc"))
+        annual_hours = self._to_decimal(payload.get("annual_hours"))
+        if capex <= DECIMAL_ZERO or base_mc <= DECIMAL_ZERO or annual_hours <= DECIMAL_ZERO:
+            raise BusinessRuleViolationError(
+                message="化工 NPV 仿真参数必须大于 0",
+                error_code="CHEMICAL_SIMULATION_PARAM_INVALID",
+                detail={
+                    "snapshot_id": snapshot_id,
+                    "capex": self._decimal_to_currency_string(capex),
+                    "base_mc": self._decimal_to_currency_string(base_mc),
+                    "annual_hours": self._decimal_to_string(annual_hours),
+                },
+            )
+
+        baseline = self._load_financial_baseline(int(baseline_id), active_only=True)
+        financial_baseline = self._build_financial_baseline_context(payload)
+        simulation_started_at = datetime.now()
+
+        snapshot.status = "SIMULATING"
+        snapshot.updated_by = SYSTEM_OPERATOR
+        snapshot.simulation_result = {
+            "status": "SIMULATING",
+            "snapshot_id": snapshot_id,
+            "started_at": simulation_started_at.isoformat(),
+            "simulation_type": "PROCESS_CHEMICAL",
+            "simulation_params": payload,
+            "financial_baseline": financial_baseline,
+        }
+        self.db.commit()
+
+        lifecycle_years = baseline.lifecycle_years
+        discount_rate = self._percent_to_ratio(baseline.discount_rate)
+        corrosion_rate = self._percent_to_ratio(baseline.corrosion_rate)
+        risk_strategy = str(baseline.risk_strategy or "FIXED").upper()
+        risk_value = self._to_financial_decimal(baseline.risk_value)
+        if risk_strategy == "PERCENTAGE":
+            risk_value = self._percent_to_ratio(risk_value)
+        eol_salvage_rate = self._percent_to_ratio(baseline.eol_salvage_rate)
+
+        static_total_cost = self._to_financial_decimal(
+            CostingService(self.db).calculate_static_cost(snapshot_id).get("total_cost", DECIMAL_ZERO)
+        )
+        single_run_hours = self._extract_single_run_hours(snapshot.snapshot_data or {})
+        if single_run_hours <= DECIMAL_ZERO:
+            single_run_hours = DECIMAL_ONE
+
+        annual_opex = self._quantize_financial((static_total_cost / single_run_hours) * annual_hours)
+
+        capex_pv_total = capex
+        opex_pv_total = DECIMAL_ZERO
+        maintenance_pv_total = DECIMAL_ZERO
+        risk_pv_total = DECIMAL_ZERO
+        eol_pv_total = DECIMAL_ZERO
+        total_npv = capex
+        timeline_events: list[dict[str, Any]] = []
+
+        for year in range(1, lifecycle_years + 1):
+            discount_factor = (DECIMAL_ONE + discount_rate) ** year
+            mc_t = self._quantize_financial(base_mc * ((DECIMAL_ONE + corrosion_rate) ** (year - 1)))
+            rc_t = self._quantize_financial(annual_opex * risk_value) if risk_strategy == "PERCENTAGE" else risk_value
+
+            pv_opex = self._quantize_financial(annual_opex / discount_factor)
+            pv_mc = self._quantize_financial(mc_t / discount_factor)
+            pv_rc = self._quantize_financial(rc_t / discount_factor)
+            pv_eol = DECIMAL_ZERO
+            if year == lifecycle_years:
+                pv_eol = self._quantize_financial(-(capex * eol_salvage_rate) / discount_factor)
+
+            year_npv = pv_opex + pv_mc + pv_rc + pv_eol
+            total_npv += year_npv
+            opex_pv_total += pv_opex
+            maintenance_pv_total += pv_mc
+            risk_pv_total += pv_rc
+            eol_pv_total += pv_eol
+
+            timeline_events.append(
+                {
+                    "year": year,
+                    "discount_factor": self._decimal_to_ratio_string(discount_factor),
+                    "annual_opex": self._decimal_to_currency_string(annual_opex),
+                    "maintenance_cost": self._decimal_to_currency_string(mc_t),
+                    "risk_cost": self._decimal_to_currency_string(rc_t),
+                    "pv_opex": self._decimal_to_currency_string(pv_opex),
+                    "pv_mc": self._decimal_to_currency_string(pv_mc),
+                    "pv_rc": self._decimal_to_currency_string(pv_rc),
+                    "pv_eol": self._decimal_to_currency_string(pv_eol),
+                    "year_total_pv": self._decimal_to_currency_string(year_npv),
+                }
+            )
+
+        simulation_finished_at = datetime.now()
+        result = {
+            "status": "COMPLETED",
+            "snapshot_id": snapshot_id,
+            "started_at": simulation_started_at.isoformat(),
+            "finished_at": simulation_finished_at.isoformat(),
+            "simulation_type": "PROCESS_CHEMICAL",
+            "simulation_params": payload,
+            "financial_baseline": financial_baseline,
+            "static_total_cost": self._decimal_to_currency_string(static_total_cost),
+            "single_run_hours": self._decimal_to_string(single_run_hours),
+            "annual_opex": self._decimal_to_currency_string(annual_opex),
+            "financial_breakdown": {
+                "CAPEX": self._decimal_to_currency_string(capex_pv_total),
+                "OPEX": self._decimal_to_currency_string(opex_pv_total),
+                "M&R": self._decimal_to_currency_string(maintenance_pv_total),
+                "RISK_COST": self._decimal_to_currency_string(risk_pv_total),
+                "EOL": self._decimal_to_currency_string(eol_pv_total),
+            },
+            "lcc_total_cost": self._decimal_to_currency_string(total_npv),
             "timeline_events": timeline_events,
         }
 
@@ -303,6 +446,71 @@ class SimulationService:
     def _build_virtual_start_time(self) -> datetime:
         tomorrow = datetime.now() + timedelta(days=1)
         return datetime.combine(tomorrow.date(), time(hour=8, minute=0, second=0))
+
+    def _build_financial_baseline_context(self, simulation_params: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not simulation_params:
+            return None
+
+        baseline_id = simulation_params.get("baseline_id")
+        if baseline_id in (None, ""):
+            return None
+
+        baseline = self._load_financial_baseline(int(baseline_id), active_only=False)
+
+        return {
+            "id": baseline.id,
+            "rule_name": baseline.rule_name,
+            "lifecycle_years": baseline.lifecycle_years,
+            "discount_rate": self._decimal_to_string(self._to_decimal(baseline.discount_rate)),
+            "corrosion_rate": self._decimal_to_string(self._to_decimal(baseline.corrosion_rate)),
+            "risk_strategy": baseline.risk_strategy,
+            "risk_value": self._decimal_to_string(self._to_decimal(baseline.risk_value)),
+            "eol_salvage_rate": self._decimal_to_string(self._to_decimal(baseline.eol_salvage_rate)),
+            "is_active": baseline.is_active,
+        }
+
+    def _load_financial_baseline(self, baseline_id: int, *, active_only: bool) -> LccFinancialBaseline:
+        stmt = select(LccFinancialBaseline).where(
+            LccFinancialBaseline.id == baseline_id,
+            LccFinancialBaseline.is_deleted == False,
+        )
+        if active_only:
+            stmt = stmt.where(LccFinancialBaseline.is_active == True)
+
+        baseline = self.db.execute(stmt).scalar_one_or_none()
+        if baseline is None:
+            raise ResourceNotFoundError(resource="LCC 财务评估基准", identifier=baseline_id)
+        return baseline
+
+    def _extract_single_run_hours(self, snapshot_data: dict[str, Any]) -> Decimal:
+        total_hours = DECIMAL_ZERO
+        for route in snapshot_data.get("routes", []):
+            for step in route.get("steps", []):
+                total_hours += self._to_decimal(step.get("override_t_set"))
+                total_hours += self._to_decimal(step.get("override_t_run"))
+        return self._quantize(total_hours)
+
+    def _to_financial_decimal(self, value: Any) -> Decimal:
+        if value in (None, ""):
+            return DECIMAL_ZERO
+        if isinstance(value, Decimal):
+            return self._quantize_financial(value)
+        return self._quantize_financial(Decimal(str(value)))
+
+    def _percent_to_ratio(self, value: Any) -> Decimal:
+        return self._quantize_ratio(self._to_financial_decimal(value) / Decimal("100"))
+
+    def _quantize_financial(self, value: Decimal) -> Decimal:
+        return value.quantize(FINANCIAL_QUANTIZER, rounding=ROUND_HALF_UP)
+
+    def _quantize_ratio(self, value: Decimal) -> Decimal:
+        return value.quantize(RATIO_QUANTIZER, rounding=ROUND_HALF_UP)
+
+    def _decimal_to_currency_string(self, value: Decimal) -> str:
+        return format(self._quantize_financial(value), "f")
+
+    def _decimal_to_ratio_string(self, value: Decimal) -> str:
+        return format(self._quantize_ratio(value), "f")
 
     def _load_electricity_rate_context(self) -> ElectricityRateContext:
         energy_rate = self.db.execute(

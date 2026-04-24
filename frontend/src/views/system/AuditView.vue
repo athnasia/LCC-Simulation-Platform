@@ -148,7 +148,7 @@ function formatDate(iso: string) {
 }
 
 const actionTagType = (action: AuditAction) => {
-  return resolveDictionaryTagType(auditActionOptions.value, action, '')
+  return resolveDictionaryTagType(auditActionOptions.value, action)
 }
 
 const getActionLabel = (action: AuditAction) => {

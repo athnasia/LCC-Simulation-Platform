@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_active_user, get_db, require_permission
+from app.core.dependencies import get_db, require_permission
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     EnergyCalendarCreate,
@@ -35,7 +35,7 @@ def list_energy_rates(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/energy", "read")),
 ):
     return EnergyRateService(db).list(
         keyword=keyword,
@@ -70,7 +70,7 @@ def create_energy_rate(
 def get_energy_rate(
     rate_id: int,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/energy", "read")),
 ):
     return EnergyRateService(db).get(rate_id)
 
@@ -125,7 +125,7 @@ def list_energy_calendars(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/energy", "read")),
 ):
     return EnergyCalendarService(db).list(
         energy_rate_id=energy_rate_id,
@@ -159,7 +159,7 @@ def create_energy_calendar(
 def get_energy_calendar(
     calendar_id: int,
     db: Session = Depends(get_db),
-    _: SysUser = Depends(get_current_active_user),
+    _: SysUser = Depends(require_permission("/master-data/energy", "read")),
 ):
     return EnergyCalendarService(db).get(calendar_id)
 

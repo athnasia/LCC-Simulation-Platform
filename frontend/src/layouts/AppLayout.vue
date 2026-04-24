@@ -38,78 +38,67 @@
           <!-- 1. 全景视界 -->
           <el-menu-item index="/dashboard">
             <el-icon><Monitor /></el-icon>
-            <template #title>全景视界</template>
+            <template #title>首页</template>
           </el-menu-item>
 
           <!-- 2. 主数据中心 -->
-          <el-sub-menu index="master-data">
+          <el-sub-menu v-if="hasMasterDataAccess" index="master-data">
             <template #title>
               <el-icon><Grid /></el-icon>
               <span>主数据中心</span>
             </template>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/dictionaries:read')" index="/master-data/dictionaries">
-              <el-icon><Collection /></el-icon>基础字典与模板
+            <el-menu-item v-if="canReadDictionaries" index="/master-data/dictionaries">
+              <el-icon><Collection /></el-icon>业务字典
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/materials:read')" index="/master-data/materials">
-              <el-icon><Box /></el-icon>材料台账
+            <el-menu-item v-if="canReadMaterials" index="/master-data/materials">
+              <el-icon><Box /></el-icon>物料与材料台账
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/equipments:read')" index="/master-data/equipments">
-              <el-icon><Setting /></el-icon>设备能力库
+            <el-menu-item v-if="canReadEquipments" index="/master-data/equipments">
+              <el-icon><Setting /></el-icon>设备资产台账
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/processes:read')" index="/master-data/processes">
-              <el-icon><Operation /></el-icon>工艺工时库
+            <el-menu-item v-if="canReadProcesses" index="/master-data/processes">
+              <el-icon><Operation /></el-icon>工艺字典
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/labor:read')" index="/master-data/labor">
-              <el-icon><User /></el-icon>人员技能矩阵
+            <el-menu-item v-if="canReadLabor" index="/master-data/labor">
+              <el-icon><User /></el-icon>人员岗位与费率
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/master-data/energy:read')" index="/master-data/energy">
-              <el-icon><Lightning /></el-icon>能源日历
+            <el-menu-item v-if="canReadEnergy" index="/master-data/energy">
+              <el-icon><Lightning /></el-icon>能源与日历中心
             </el-menu-item>
           </el-sub-menu>
 
           <!-- 3. 工程建模 -->
-          <el-sub-menu index="engineering">
+          <el-sub-menu v-if="hasEngineeringAccess" index="engineering">
             <template #title>
               <el-icon><Edit /></el-icon>
-              <span>工程建模</span>
+              <span>工程建模中心</span>
             </template>
-            <el-menu-item index="/engineering/projects">
+            <el-menu-item v-if="canReadProjects" index="/engineering/projects">
               <el-icon><FolderOpened /></el-icon>产品方案池
             </el-menu-item>
-            <el-menu-item index="/engineering/workbench">
-              <el-icon><Connection /></el-icon>工程建模工作台
+            <el-menu-item v-if="canReadWorkbench" index="/engineering/workbench">
+              <el-icon><Connection /></el-icon>设计要素编排
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- 4. 成本核算 -->
-          <el-sub-menu index="costing">
+          <!-- 4. 成本仿真与决策 -->
+          <el-sub-menu v-if="hasCostingAccess" index="costing">
             <template #title>
               <el-icon><Money /></el-icon>
-              <span>成本核算</span>
+              <span>成本仿真与决策</span>
             </template>
-            <el-menu-item v-if="authStore.hasPermissionScope('/costing/snapshot-center:read')" index="/costing/snapshot-center">
-              <el-icon><DocumentCopy /></el-icon>全景快照中心
+            <el-menu-item v-if="canReadFinancialBaselines" index="/costing/lcc-financial-baselines">
+              <el-icon><Tickets /></el-icon>财务评估标准
             </el-menu-item>
-            <el-menu-item v-if="authStore.hasPermissionScope('/costing/rules:read')" index="/costing/rules">
-              <el-icon><Tickets /></el-icon>作业成本规则
+            <el-menu-item v-if="canReadSnapshotCenter" index="/costing/snapshot-center">
+              <el-icon><Document /></el-icon>产品快照中心
+            </el-menu-item>
+            <el-menu-item v-if="canReadDecisionCenter" index="/costing/decision-center">
+              <el-icon><TrendCharts /></el-icon>仿真结果优选与决策
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- 5. 仿真优化 -->
-          <el-sub-menu index="simulation">
-            <template #title>
-              <el-icon><DataLine /></el-icon>
-              <span>仿真优化</span>
-            </template>
-            <el-menu-item index="/simulation/tasks">
-              <el-icon><VideoPlay /></el-icon>LCC 仿真任务
-            </el-menu-item>
-            <el-menu-item index="/simulation/results">
-              <el-icon><TrendCharts /></el-icon>结果对比分析
-            </el-menu-item>
-          </el-sub-menu>
-
-          <!-- 6. 系统管理 -->
+          <!-- 5. 系统管理 -->
           <el-sub-menu v-if="authStore.hasSystemAccess" index="system">
             <template #title>
               <el-icon><Tools /></el-icon>
@@ -155,7 +144,7 @@
           <el-icon :size="16" class="text-gray-400"><Location /></el-icon>
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="currentMeta.module">
+            <el-breadcrumb-item v-if="currentMeta.module && moduleTitle && moduleTitle !== currentMeta.title">
               {{ moduleTitle }}
             </el-breadcrumb-item>
             <el-breadcrumb-item v-if="currentMeta.title">
@@ -204,9 +193,8 @@ import { useRoute } from 'vue-router'
 import {
   DataAnalysis, Monitor, Grid, Collection, Box, Setting, Operation,
   User, Edit, FolderOpened, Connection, Money, Tickets, Document,
-  DataLine, VideoPlay, Tools, Avatar, Key, List, DArrowLeft,
+  Tools, Avatar, Key, List, Lightning, TrendCharts, DArrowLeft,
   DArrowRight, Location, UserFilled, ArrowDown, SwitchButton,
-  DocumentCopy,
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -220,19 +208,48 @@ const isCollapsed = ref(false)
 const route = useRoute()
 
 const currentPath = computed(() => route.path)
-const currentMeta = computed(() => route.meta as Record<string, string>)
+const currentMeta = computed(() => route.meta as Record<string, unknown>)
+
+const canReadDictionaries = computed(() => authStore.hasPermissionScope('/master-data/dict-templates:read'))
+const canReadMaterials = computed(() => authStore.hasPermissionScope('/master-data/materials:read'))
+const canReadEquipments = computed(() => authStore.hasPermissionScope('/master-data/equipments:read'))
+const canReadProcesses = computed(() => authStore.hasPermissionScope('/master-data/processes:read'))
+const canReadLabor = computed(() => authStore.hasPermissionScope('/master-data/labor:read'))
+const canReadEnergy = computed(() => authStore.hasPermissionScope('/master-data/energy:read'))
+
+const canReadProjects = computed(() => authStore.hasPermissionScope('/engineering/projects:read'))
+const canReadWorkbench = computed(() => authStore.hasPermissionScope('/engineering/bom-nodes:read'))
+
+const canReadFinancialBaselines = computed(() => authStore.hasPermissionScope('/costing/lcc-financial-baselines:read'))
+const canReadSnapshotCenter = computed(() => authStore.hasPermissionScope('/engineering/snapshots:read'))
+const canReadDecisionCenter = computed(() => authStore.hasPermissionScope('/engineering/snapshots:read'))
+
+const hasMasterDataAccess = computed(() => (
+  canReadDictionaries.value
+  || canReadMaterials.value
+  || canReadEquipments.value
+  || canReadProcesses.value
+  || canReadLabor.value
+  || canReadEnergy.value
+))
+
+const hasEngineeringAccess = computed(() => canReadProjects.value || canReadWorkbench.value)
+const hasCostingAccess = computed(() => (
+  canReadFinancialBaselines.value
+  || canReadSnapshotCenter.value
+  || canReadDecisionCenter.value
+))
 
 const moduleMap: Record<string, string> = {
-  dashboard: '全景视界',
+  dashboard: '首页',
   'master-data': '主数据中心',
-  engineering: '工程建模',
-  costing: '成本核算',
-  simulation: '仿真优化',
+  engineering: '工程建模中心',
+  costing: '成本仿真与决策',
   system: '系统管理',
 }
 
 const moduleTitle = computed(
-  () => moduleMap[currentMeta.value?.module] ?? '',
+  () => moduleMap[String(currentMeta.value?.module ?? '')] ?? '',
 )
 
 const currentDate = computed(() =>

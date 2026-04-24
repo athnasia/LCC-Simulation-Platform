@@ -360,3 +360,18 @@ class GenerateSnapshotResponse(BaseModel):
     snapshot_name: str = Field(..., description="快照名称")
     status: str = Field(..., description="快照状态")
     created_at: datetime = Field(..., description="创建时间")
+
+
+class PromoteSnapshotToVersionRequest(BaseModel):
+    """将快照推优为新方案版本的请求模型"""
+    description: str = Field(..., min_length=1, max_length=512, description="版本决策说明")
+
+
+class PromoteSnapshotToVersionResponse(BaseModel):
+    """将快照推优为新方案版本的响应模型"""
+    snapshot_id: int = Field(..., description="入选快照 ID")
+    version_id: int = Field(..., description="新生成的方案版本 ID")
+    version_number: int = Field(..., description="新版本号")
+    status: str = Field(..., description="版本状态")
+    description: str | None = Field(None, description="最终版本描述")
+    message: str = Field(..., description="处理结果提示")

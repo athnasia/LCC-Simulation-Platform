@@ -91,8 +91,19 @@
 
       <div class="table-section">
         <div class="table-header">
-          <span class="table-title">快照台账列表</span>
-          <span class="table-count">共 {{ filteredSnapshots.length }} 条记录</span>
+          <div class="table-header-left">
+            <span class="table-title">快照台账列表</span>
+            <span class="table-count">共 {{ filteredSnapshots.length }} 条记录</span>
+          </div>
+          <div class="table-header-actions">
+            <el-button
+              type="primary"
+              :disabled="!canCompareSelectedSnapshots"
+              @click="handleCompareSnapshots"
+            >
+              📊 多方案 LCC 对标
+            </el-button>
+          </div>
         </div>
         
         <el-table
@@ -100,8 +111,10 @@
           v-loading="loading"
           border
           stripe
+          @selection-change="handleSelectionChange"
           style="width: 100%"
         >
+          <el-table-column type="selection" width="52" fixed="left" />
           <el-table-column prop="snapshot_code" label="快照编码" width="160" />
           
           <el-table-column prop="snapshot_name" label="快照名称" min-width="180">
@@ -190,14 +203,97 @@
           />
         </div>
       </div>
+
+      <el-dialog
+        v-model="simulationDialogVisible"
+        title="配置化工 LCC 仿真参数"
+        width="600px"
+        destroy-on-close
+      >
+        <el-form
+          ref="simulationFormRef"
+          :model="simulationForm"
+          :rules="simulationRules"
+          label-width="140px"
+        >
+          <el-form-item label="选择财务基准" prop="baseline_id">
+            <el-select
+              v-model="simulationForm.baseline_id"
+              placeholder="请选择 LCC 财务评估基准"
+              filterable
+              clearable
+              class="w-full"
+              :loading="baselineLoading"
+            >
+              <el-option
+                v-for="item in baselineOptions"
+                :key="item.id"
+                :label="item.rule_name"
+                :value="item.id"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="初始总投资 CAPEX" prop="capex">
+            <div class="number-input-group">
+              <el-input-number
+                v-model="simulationForm.capex"
+                :min="0"
+                :precision="2"
+                controls-position="right"
+                class="number-input"
+              />
+              <span class="unit-text">万元</span>
+            </div>
+            <div class="field-hint">当前快照的具体项目建厂/设备采买总造价。</div>
+          </el-form-item>
+
+          <el-form-item label="首年维保基准费" prop="base_mc">
+            <div class="number-input-group">
+              <el-input-number
+                v-model="simulationForm.base_mc"
+                :min="0"
+                :precision="2"
+                controls-position="right"
+                class="number-input"
+              />
+              <span class="unit-text">万元</span>
+            </div>
+            <div class="field-hint">第一年的维保费基数，后续年份将按基准中的腐蚀率自动复利递增。</div>
+          </el-form-item>
+
+          <el-form-item label="年运行小时数" prop="annual_hours">
+            <div class="number-input-group">
+              <el-input-number
+                v-model="simulationForm.annual_hours"
+                :min="1"
+                :precision="0"
+                controls-position="right"
+                class="number-input"
+              />
+              <span class="unit-text">小时</span>
+            </div>
+          </el-form-item>
+        </el-form>
+
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="handleCancelSimulationDialog">取消</el-button>
+            <el-button type="primary" :loading="simulationSubmitting" @click="handleConfirmSimulation">
+              确认推演
+            </el-button>
+          </div>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import {
   DocumentCopy,
   CircleCheck,
@@ -207,10 +303,11 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import { modelSnapshotApi, type ModelSnapshot } from '@/api/engineering'
-import { getStaticCostLedger } from '@/api/costing'
+import { getLccBaselines, getStaticCostLedger, type LccFinancialBaseline } from '@/api/costing'
 import {
   getSimulationStatus,
   startLccSimulation,
+  type StartSimulationPayload,
   type SimulationResult,
   type SimulationStatusResponse,
 } from '@/api/simulation'
@@ -234,6 +331,12 @@ interface Snapshot {
 
 const router = useRouter()
 const loading = ref(false)
+const baselineLoading = ref(false)
+const simulationSubmitting = ref(false)
+const simulationDialogVisible = ref(false)
+const simulationFormRef = ref<FormInstance>()
+const baselineOptions = ref<LccFinancialBaseline[]>([])
+const selectedSnapshotForSimulation = ref<Snapshot | null>(null)
 const pollingTimers = new Map<number, number>()
 let isDisposed = false
 
@@ -257,6 +360,51 @@ const pagination = reactive({
 
 const snapshots = ref<Snapshot[]>([])
 const allSnapshots = ref<SnapshotListItem[]>([])
+const selectedSnapshots = ref<Snapshot[]>([])
+
+interface SimulationFormState {
+  baseline_id: number | undefined
+  capex: number | undefined
+  base_mc: number | undefined
+  annual_hours: number
+}
+
+const createDefaultSimulationForm = (): SimulationFormState => ({
+  baseline_id: undefined,
+  capex: undefined,
+  base_mc: undefined,
+  annual_hours: 8000,
+})
+
+const simulationForm = reactive<SimulationFormState>(createDefaultSimulationForm())
+
+const validatePositiveNumber = (_rule: unknown, value: number | undefined, callback: (error?: Error) => void) => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) {
+    callback(new Error('请输入有效数值'))
+    return
+  }
+  if (Number(value) <= 0) {
+    callback(new Error('数值必须大于 0'))
+    return
+  }
+  callback()
+}
+
+const simulationRules: FormRules<SimulationFormState> = {
+  baseline_id: [{ required: true, message: '请选择财务基准', trigger: 'change' }],
+  capex: [
+    { required: true, message: '请输入初始总投资 CAPEX', trigger: 'change' },
+    { validator: validatePositiveNumber, trigger: 'change' },
+  ],
+  base_mc: [
+    { required: true, message: '请输入首年维保基准费', trigger: 'change' },
+    { validator: validatePositiveNumber, trigger: 'change' },
+  ],
+  annual_hours: [
+    { required: true, message: '请输入年运行小时数', trigger: 'change' },
+    { validator: validatePositiveNumber, trigger: 'change' },
+  ],
+}
 
 const filteredSnapshots = computed(() => {
   let result = [...snapshots.value]
@@ -284,6 +432,10 @@ const filteredSnapshots = computed(() => {
   }
   
   return result
+})
+
+const canCompareSelectedSnapshots = computed(() => {
+  return selectedSnapshots.value.length === 2 && selectedSnapshots.value.every(item => item.status === 'COMPLETED')
 })
 
 const formatCurrency = (value: number): string => {
@@ -366,6 +518,11 @@ const buildSnapshotRow = async (snapshot: SnapshotListItem): Promise<Snapshot> =
     created_at: snapshot.created_at,
     simulation_result: snapshot.simulation_result ?? null,
   }
+}
+
+const resetSimulationForm = () => {
+  Object.assign(simulationForm, createDefaultSimulationForm())
+  simulationFormRef.value?.clearValidate()
 }
 
 const updateSnapshotRow = (snapshotId: number, patch: Partial<Snapshot>) => {
@@ -460,6 +617,7 @@ const loadSnapshots = async () => {
     }
 
     snapshots.value = snapshotList
+    selectedSnapshots.value = []
     pagination.total = snapshotList.length
     syncStats()
   } catch (error: any) {
@@ -470,8 +628,23 @@ const loadSnapshots = async () => {
   }
 }
 
+const loadBaselineOptions = async () => {
+  baselineLoading.value = true
+
+  try {
+    const res = await getLccBaselines({ is_active: true, page: 1, size: 200 })
+    baselineOptions.value = res.data.items ?? []
+  } catch (error: any) {
+    console.error('加载 LCC 财务评估基准失败:', error)
+    ElMessage.error(error.response?.data?.message || '加载 LCC 财务评估基准失败')
+  } finally {
+    baselineLoading.value = false
+  }
+}
+
 const handleSearch = () => {
   pagination.page = 1
+  selectedSnapshots.value = []
 }
 
 const handleReset = () => {
@@ -479,54 +652,96 @@ const handleReset = () => {
   filterForm.status = ''
   filterForm.dateRange = []
   pagination.page = 1
+  selectedSnapshots.value = []
+}
+
+const handleSelectionChange = (rows: Snapshot[]) => {
+  selectedSnapshots.value = rows
+}
+
+const handleCompareSnapshots = () => {
+  if (!canCompareSelectedSnapshots.value) {
+    return
+  }
+
+  const [first, second] = selectedSnapshots.value
+  router.push({
+    path: '/engineering/lcc-compare',
+    query: {
+      sid1: String(first.id),
+      sid2: String(second.id),
+    },
+  })
 }
 
 const handleViewLedger = (row: Snapshot) => {
   router.push(`/engineering/cost-ledger/${row.id}`)
 }
 
-const handleStartSimulation = async (row: Snapshot) => {
-  const previousStatus = row.status
+const handleStartSimulation = (row: Snapshot) => {
+  selectedSnapshotForSimulation.value = row
+  resetSimulationForm()
+  simulationDialogVisible.value = true
+}
+
+const handleCancelSimulationDialog = () => {
+  simulationDialogVisible.value = false
+  selectedSnapshotForSimulation.value = null
+  resetSimulationForm()
+}
+
+const handleConfirmSimulation = async () => {
+  const currentRow = selectedSnapshotForSimulation.value
+  if (!currentRow) {
+    return
+  }
+
+  const valid = await simulationFormRef.value?.validate().catch(() => false)
+  if (!valid) {
+    return
+  }
+
+  const payload: StartSimulationPayload = {
+    snapshot_id: currentRow.id,
+    baseline_id: Number(simulationForm.baseline_id),
+    capex: Number(simulationForm.capex),
+    base_mc: Number(simulationForm.base_mc),
+    annual_hours: Number(simulationForm.annual_hours),
+  }
+
+  simulationSubmitting.value = true
 
   try {
-    await ElMessageBox.confirm(
-      '确定要将此模型推入算力集群进行全生命周期仿真吗？该过程可能需要几分钟。',
-      '启动LCC仿真',
-      {
-        confirmButtonText: '确定启动',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
+    clearPolling(currentRow.id)
+    await startLccSimulation(payload)
 
-    clearPolling(row.id)
-    updateSnapshotRow(row.id, {
+    simulationDialogVisible.value = false
+    selectedSnapshotForSimulation.value = null
+    resetSimulationForm()
+
+    await loadSnapshots()
+    updateSnapshotRow(currentRow.id, {
       status: 'SIMULATING',
       simulation_result: {
         status: 'SIMULATING',
-        snapshot_id: row.id,
+        snapshot_id: currentRow.id,
+        simulation_params: payload,
       },
     })
 
-    await startLccSimulation(row.id)
-
     ElMessage.success({
-      message: `快照 ${row.snapshot_code} 已成功投递至仿真队列`,
+      message: `快照 ${currentRow.snapshot_code} 已成功投递至仿真队列`,
       duration: 3000,
     })
 
     const timerId = window.setTimeout(() => {
-      void pollSimulationStatus(row.id)
+      void pollSimulationStatus(currentRow.id)
     }, 3000)
-    pollingTimers.set(row.id, timerId)
+    pollingTimers.set(currentRow.id, timerId)
   } catch (error) {
-    updateSnapshotRow(row.id, {
-      status: previousStatus,
-      simulation_result: row.simulation_result,
-    })
-    if (error !== 'cancel') {
-      console.error('启动仿真失败:', error)
-    }
+    console.error('启动仿真失败:', error)
+  } finally {
+    simulationSubmitting.value = false
   }
 }
 
@@ -534,8 +749,13 @@ const handleViewReport = (row: Snapshot) => {
   router.push(`/costing/lcc-report/${row.id}`)
 }
 
+watch(filteredSnapshots, (rows) => {
+  const visibleIds = new Set(rows.map(item => item.id))
+  selectedSnapshots.value = selectedSnapshots.value.filter(item => visibleIds.has(item.id))
+})
+
 onMounted(() => {
-  void loadSnapshots()
+  void Promise.all([loadSnapshots(), loadBaselineOptions()])
 })
 
 onUnmounted(() => {
@@ -676,8 +896,21 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   padding: 16px 20px;
   border-bottom: 1px solid #ebeef5;
+}
+
+.table-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .table-title {
@@ -732,6 +965,35 @@ onUnmounted(() => {
   justify-content: flex-end;
   padding: 16px 20px;
   border-top: 1px solid #ebeef5;
+}
+
+.number-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.number-input {
+  flex: 1;
+}
+
+.unit-text {
+  color: #606266;
+  white-space: nowrap;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 :deep(.el-table) {

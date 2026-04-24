@@ -99,6 +99,12 @@ pnpm dev
 - API文档: http://localhost:8001/api/docs
 - 默认账号: admin / 123456
 
+### Worker 重启规则
+
+- 凡是修改 `backend/app/services/simulation_service.py` 或 `backend/app/worker/tasks.py`，完成代码变更后都必须重启 Celery Worker 容器 `lcc-app-worker-1`。
+- 原因：本地开发环境中 API 运行在宿主机，而异步仿真实际由 Docker 中的 Worker 执行；若不重启 Worker，可能出现 API 已是新逻辑、但仿真结果仍由旧 Worker 代码产出的情况。
+- 推荐命令：`docker compose restart worker`
+
 ## 📁 项目结构
 
 ```

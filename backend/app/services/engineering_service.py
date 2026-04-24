@@ -53,6 +53,8 @@ from app.schemas.engineering import (
     GenerateSnapshotRequest,
     GenerateSnapshotResponse,
     ModelSnapshotCreate,
+    PromoteSnapshotToVersionRequest,
+    PromoteSnapshotToVersionResponse,
     ModelSnapshotResponse,
     ModelSnapshotUpdate,
     ProductCreate,
@@ -66,6 +68,20 @@ from app.schemas.engineering import (
     RouteStepBindUpdate,
     RouteStepBindWithProcessResponse,
 )
+
+
+def _ensure_scheme_version_editable(version: EngDesignSchemeVersion | None, action: str) -> None:
+    if version is None:
+        raise BusinessRuleViolationError(
+            error_code="SCHEME_VERSION_NOT_FOUND",
+            message="未找到对应的方案版本，无法执行写入操作",
+        )
+
+    if version.status in {"RELEASED", "ARCHIVED"}:
+        raise BusinessRuleViolationError(
+            error_code="SCHEME_VERSION_READ_ONLY",
+            message=f"方案版本 V{version.version} 当前状态为 {version.status}，不允许{action}。请先创建新的草稿版本后再编辑。",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -517,6 +533,7 @@ class BomNodeService:
                 EngBomNode.id == node_id,
                 EngBomNode.is_deleted == False,
             )
+            .options(selectinload(EngBomNode.scheme_version))
         ).scalar_one_or_none()
         if node is None:
             raise ResourceNotFoundError(resource="BOM 节点", identifier=node_id)
@@ -593,6 +610,14 @@ class BomNodeService:
         return self._build_tree(nodes)
 
     def create(self, payload: BomNodeCreate, operator: str) -> BomNodeResponse:
+        version = self.db.execute(
+            select(EngDesignSchemeVersion).where(
+                EngDesignSchemeVersion.id == payload.scheme_version_id,
+                EngDesignSchemeVersion.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        _ensure_scheme_version_editable(version, "新增 BOM 节点")
+
         node = EngBomNode(**payload.model_dump(), created_by=operator, updated_by=operator)
         self.db.add(node)
         self.db.flush()
@@ -604,6 +629,8 @@ class BomNodeService:
 
     def update(self, node_id: int, payload: BomNodeUpdate, operator: str) -> BomNodeResponse:
         node = self._get_or_404(node_id)
+        _ensure_scheme_version_editable(node.scheme_version, "修改 BOM 节点")
+
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(node, field, value)
@@ -613,6 +640,8 @@ class BomNodeService:
 
     def delete(self, node_id: int, operator: str) -> None:
         node = self._get_or_404(node_id)
+        _ensure_scheme_version_editable(node.scheme_version, "删除 BOM 节点")
+
         node.is_deleted = int(datetime.now().timestamp())
         node.updated_by = operator
         self.db.flush()
@@ -631,6 +660,10 @@ class ComponentProcessRouteService:
             select(EngComponentProcessRoute).where(
                 EngComponentProcessRoute.id == route_id,
                 EngComponentProcessRoute.is_deleted == False,
+            )
+            .options(
+                selectinload(EngComponentProcessRoute.bom_node)
+                .selectinload(EngBomNode.scheme_version)
             )
         ).scalar_one_or_none()
         if route is None:
@@ -667,6 +700,18 @@ class ComponentProcessRouteService:
         )
 
     def create(self, payload: ComponentProcessRouteCreate, operator: str) -> ComponentProcessRouteResponse:
+        bom_node = self.db.execute(
+            select(EngBomNode)
+            .where(
+                EngBomNode.id == payload.bom_node_id,
+                EngBomNode.is_deleted == False,
+            )
+            .options(selectinload(EngBomNode.scheme_version))
+        ).scalar_one_or_none()
+        if bom_node is None:
+            raise ResourceNotFoundError(resource="BOM 节点", identifier=payload.bom_node_id)
+        _ensure_scheme_version_editable(bom_node.scheme_version, "新增工艺路线")
+
         route = EngComponentProcessRoute(**payload.model_dump(), created_by=operator, updated_by=operator)
         self.db.add(route)
         self.db.flush()
@@ -678,6 +723,8 @@ class ComponentProcessRouteService:
 
     def update(self, route_id: int, payload: ComponentProcessRouteUpdate, operator: str) -> ComponentProcessRouteResponse:
         route = self._get_or_404(route_id)
+        _ensure_scheme_version_editable(route.bom_node.scheme_version, "修改工艺路线")
+
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(route, field, value)
@@ -687,6 +734,8 @@ class ComponentProcessRouteService:
 
     def delete(self, route_id: int, operator: str) -> None:
         route = self._get_or_404(route_id)
+        _ensure_scheme_version_editable(route.bom_node.scheme_version, "删除工艺路线")
+
         route.is_deleted = int(datetime.now().timestamp())
         route.updated_by = operator
         self.db.flush()
@@ -706,7 +755,12 @@ class RouteStepBindService:
                 EngRouteStepBind.id == step_id,
                 EngRouteStepBind.is_deleted == False,
             )
-            .options(selectinload(EngRouteStepBind.process))
+            .options(
+                selectinload(EngRouteStepBind.process),
+                selectinload(EngRouteStepBind.route)
+                .selectinload(EngComponentProcessRoute.bom_node)
+                .selectinload(EngBomNode.scheme_version),
+            )
         ).scalar_one_or_none()
         if step is None:
             raise ResourceNotFoundError(resource="路线步骤", identifier=step_id)
@@ -764,6 +818,21 @@ class RouteStepBindService:
         ]
 
     def create(self, payload: RouteStepBindCreate, operator: str) -> RouteStepBindResponse:
+        route = self.db.execute(
+            select(EngComponentProcessRoute)
+            .where(
+                EngComponentProcessRoute.id == payload.route_id,
+                EngComponentProcessRoute.is_deleted == False,
+            )
+            .options(
+                selectinload(EngComponentProcessRoute.bom_node)
+                .selectinload(EngBomNode.scheme_version)
+            )
+        ).scalar_one_or_none()
+        if route is None:
+            raise ResourceNotFoundError(resource="工艺路线", identifier=payload.route_id)
+        _ensure_scheme_version_editable(route.bom_node.scheme_version, "新增工序步骤")
+
         step = EngRouteStepBind(**payload.model_dump(), created_by=operator, updated_by=operator)
         self.db.add(step)
         self.db.flush()
@@ -776,6 +845,8 @@ class RouteStepBindService:
     def update(self, step_id: int, payload: RouteStepBindUpdate, operator: str) -> RouteStepBindResponse:
         """更新路线步骤（参数覆写）"""
         step = self._get_or_404(step_id)
+        _ensure_scheme_version_editable(step.route.bom_node.scheme_version, "修改资源参数覆写")
+
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(step, field, value)
@@ -785,12 +856,29 @@ class RouteStepBindService:
 
     def delete(self, step_id: int, operator: str) -> None:
         step = self._get_or_404(step_id)
+        _ensure_scheme_version_editable(step.route.bom_node.scheme_version, "删除工序步骤")
+
         step.is_deleted = int(datetime.now().timestamp())
         step.updated_by = operator
         self.db.flush()
 
     def reorder(self, route_id: int, step_ids: list[int], operator: str) -> None:
         """重新排序路线步骤"""
+        route = self.db.execute(
+            select(EngComponentProcessRoute)
+            .where(
+                EngComponentProcessRoute.id == route_id,
+                EngComponentProcessRoute.is_deleted == False,
+            )
+            .options(
+                selectinload(EngComponentProcessRoute.bom_node)
+                .selectinload(EngBomNode.scheme_version)
+            )
+        ).scalar_one_or_none()
+        if route is None:
+            raise ResourceNotFoundError(resource="工艺路线", identifier=route_id)
+        _ensure_scheme_version_editable(route.bom_node.scheme_version, "调整工序顺序")
+
         # 验证所有步骤都属于该路线
         steps = self.db.execute(
             select(EngRouteStepBind)
@@ -1118,6 +1206,289 @@ class ModelSnapshotService:
         snapshot.updated_by = operator
         self.db.flush()
         return ModelSnapshotResponse.model_validate(snapshot)
+
+    def promote_to_version(
+        self,
+        snapshot_id: int,
+        payload: PromoteSnapshotToVersionRequest,
+        operator: str,
+    ) -> PromoteSnapshotToVersionResponse:
+        snapshot = self._get_or_404(snapshot_id)
+        if snapshot.status != "COMPLETED":
+            raise BusinessRuleViolationError(
+                error_code="SNAPSHOT_NOT_COMPLETED",
+                message="仅已完成仿真的快照允许推优为正式版本",
+                detail={
+                    "snapshot_id": snapshot.id,
+                    "snapshot_status": snapshot.status,
+                },
+            )
+
+        version = self.db.execute(
+            select(EngDesignSchemeVersion).where(
+                EngDesignSchemeVersion.id == snapshot.scheme_version_id,
+                EngDesignSchemeVersion.is_deleted == False,
+            )
+        ).scalar_one_or_none()
+        if version is None:
+            raise ResourceNotFoundError(resource="设计方案版本", identifier=snapshot.scheme_version_id)
+
+        latest_version_number = self.db.execute(
+            select(func.max(EngDesignSchemeVersion.version)).where(
+                EngDesignSchemeVersion.scheme_id == version.scheme_id,
+                EngDesignSchemeVersion.is_deleted == False,
+            )
+        ).scalar_one()
+
+        normalized_description = payload.description.strip()
+        existing_version = self.db.execute(
+            select(EngDesignSchemeVersion).where(
+                EngDesignSchemeVersion.scheme_id == version.scheme_id,
+                EngDesignSchemeVersion.description == normalized_description,
+                EngDesignSchemeVersion.status == "DRAFT",
+                EngDesignSchemeVersion.is_deleted == False,
+            )
+            .order_by(EngDesignSchemeVersion.id.desc())
+            .limit(1)
+        ).scalars().first()
+        if existing_version is not None:
+            return PromoteSnapshotToVersionResponse(
+                snapshot_id=snapshot.id,
+                version_id=existing_version.id,
+                version_number=existing_version.version,
+                status=existing_version.status,
+                description=existing_version.description,
+                message="已存在相同推优版本，返回已有版本",
+            )
+
+        next_version_number = int(latest_version_number or 0) + 1
+
+        new_version = EngDesignSchemeVersion(
+            scheme_id=version.scheme_id,
+            version=next_version_number,
+            status="DRAFT",
+            description=normalized_description,
+            created_by=operator,
+            updated_by=operator,
+        )
+        self.db.add(new_version)
+        self.db.flush()
+
+        snapshot_data = snapshot.snapshot_data or {}
+        bom_nodes = self._extract_snapshot_bom_nodes(snapshot_data)
+        routes = self._extract_snapshot_routes(snapshot_data)
+        if not bom_nodes:
+            raise BusinessRuleViolationError(
+                error_code="SNAPSHOT_DATA_EMPTY",
+                message="快照未冻结有效 BOM 数据，无法升版",
+                detail={"snapshot_id": snapshot.id},
+            )
+        node_id_mapping = self._restore_bom_nodes_from_snapshot(bom_nodes, routes, new_version.id, operator)
+        self._restore_routes_from_snapshot(routes, node_id_mapping, operator)
+
+        return PromoteSnapshotToVersionResponse(
+            snapshot_id=snapshot.id,
+            version_id=new_version.id,
+            version_number=new_version.version,
+            status=new_version.status,
+            description=new_version.description,
+            message="已基于快照冻结数据创建新方案版本",
+        )
+
+    def _extract_snapshot_bom_nodes(self, snapshot_data: dict[str, Any]) -> list[dict[str, Any]]:
+        bom_nodes = snapshot_data.get("bom_tree") or []
+        if bom_nodes:
+            return [json.loads(json.dumps(node)) for node in bom_nodes]
+
+        annotated_tree = snapshot_data.get("annotated_bom_tree") or []
+        flattened_nodes: list[dict[str, Any]] = []
+
+        def walk(nodes: list[dict[str, Any]], parent_id: int | None = None) -> None:
+            for node in nodes:
+                node_copy = {
+                    "id": node.get("id"),
+                    "parent_id": parent_id,
+                    "node_name": node.get("node_name"),
+                    "code": node.get("code"),
+                    "node_type": node.get("node_type", "PART"),
+                    "quantity": node.get("quantity"),
+                    "unit_id": node.get("unit_id"),
+                    "sort_order": node.get("sort_order", 0),
+                    "is_configured": node.get("is_configured", False),
+                    "attributes": node.get("attributes"),
+                    "description": node.get("description"),
+                }
+                flattened_nodes.append(node_copy)
+                children = node.get("children") or []
+                if children:
+                    walk(children, node.get("id"))
+
+        walk(annotated_tree)
+        return flattened_nodes
+
+    def _extract_snapshot_routes(self, snapshot_data: dict[str, Any]) -> list[dict[str, Any]]:
+        raw_routes = snapshot_data.get("routes") or []
+        if raw_routes:
+            return [json.loads(json.dumps(route)) for route in raw_routes]
+
+        route_costs = snapshot_data.get("route_costs") or []
+        restored_routes: list[dict[str, Any]] = []
+        for route in route_costs:
+            step_costs = route.get("step_costs") or []
+            restored_routes.append(
+                {
+                    "route_id": route.get("route_id"),
+                    "route_name": route.get("route_name") or f"Restored Route {route.get('route_id')}",
+                    "bom_node_id": route.get("bom_node_id"),
+                    "bom_node_name": route.get("bom_node_name"),
+                    "steps": [
+                        {
+                            "process_id": step.get("process_id"),
+                            "step_order": step.get("step_order"),
+                            "process_type": step.get("process_type", "IN_HOUSE"),
+                            "override_t_set": step.get("t_set"),
+                            "override_t_run": step.get("t_run"),
+                            "outsource_price": step.get("outsource_cost"),
+                            "override_mat_params": None,
+                            "override_equipment_id": None,
+                            "description": "restored from route_costs",
+                        }
+                        for step in step_costs
+                    ],
+                }
+            )
+        return restored_routes
+
+    def _restore_bom_nodes_from_snapshot(
+        self,
+        bom_nodes: list[dict[str, Any]],
+        routes: list[dict[str, Any]],
+        target_version_id: int,
+        operator: str,
+    ) -> dict[int, int]:
+        route_node_ids = {route.get("bom_node_id") for route in routes if route.get("bom_node_id") is not None}
+        pending_nodes = [json.loads(json.dumps(node)) for node in bom_nodes]
+        node_id_mapping: dict[int, int] = {}
+
+        while pending_nodes:
+            progressed = False
+            next_pending: list[dict[str, Any]] = []
+
+            for node in pending_nodes:
+                legacy_node_id = node.get("id")
+                legacy_parent_id = node.get("parent_id")
+
+                if legacy_parent_id is not None and legacy_parent_id not in node_id_mapping:
+                    next_pending.append(node)
+                    continue
+
+                new_node = EngBomNode(
+                    scheme_version_id=target_version_id,
+                    parent_id=node_id_mapping.get(legacy_parent_id) if legacy_parent_id is not None else None,
+                    node_name=node.get("node_name") or f"Recovered Node {legacy_node_id}",
+                    code=(node.get("code") or f"SNAP_NODE_{legacy_node_id}")[:50],
+                    node_type=node.get("node_type") or "PART",
+                    quantity=self._to_decimal_or_none(node.get("quantity")),
+                    unit_id=node.get("unit_id"),
+                    sort_order=int(node.get("sort_order") or 0),
+                    is_configured=bool(node.get("is_configured") or legacy_node_id in route_node_ids),
+                    attributes=json.loads(json.dumps(node.get("attributes"))) if node.get("attributes") is not None else None,
+                    description=node.get("description"),
+                    created_by=operator,
+                    updated_by=operator,
+                )
+                self.db.add(new_node)
+                self.db.flush()
+
+                if legacy_node_id is not None:
+                    node_id_mapping[int(legacy_node_id)] = new_node.id
+                progressed = True
+
+            if not progressed:
+                unresolved_parent_ids = sorted(
+                    {
+                        node.get("parent_id")
+                        for node in next_pending
+                        if node.get("parent_id") is not None
+                    }
+                )
+                raise BusinessRuleViolationError(
+                    error_code="SNAPSHOT_BOM_TREE_INVALID",
+                    message="快照中的 BOM 树父子关系不完整，无法回写升版",
+                    detail={
+                        "unresolved_parent_ids": unresolved_parent_ids,
+                        "snapshot_node_count": len(bom_nodes),
+                    },
+                )
+
+            pending_nodes = next_pending
+
+        return node_id_mapping
+
+    def _restore_routes_from_snapshot(
+        self,
+        routes: list[dict[str, Any]],
+        node_id_mapping: dict[int, int],
+        operator: str,
+    ) -> None:
+        for route in routes:
+            legacy_node_id = route.get("bom_node_id")
+            if legacy_node_id is None or int(legacy_node_id) not in node_id_mapping:
+                raise BusinessRuleViolationError(
+                    error_code="SNAPSHOT_ROUTE_NODE_MISSING",
+                    message="快照中的工艺路线无法关联到有效 BOM 节点",
+                    detail={
+                        "route_id": route.get("route_id"),
+                        "bom_node_id": legacy_node_id,
+                    },
+                )
+
+            legacy_route_id = route.get("route_id")
+            new_route = EngComponentProcessRoute(
+                bom_node_id=node_id_mapping[int(legacy_node_id)],
+                route_name=route.get("route_name") or f"Recovered Route {legacy_route_id}",
+                route_code=(f"SNAP_ROUTE_{legacy_route_id or 'X'}")[:50],
+                description=route.get("description"),
+                is_active=bool(route.get("is_active", True)),
+                created_by=operator,
+                updated_by=operator,
+            )
+            self.db.add(new_route)
+            self.db.flush()
+
+            for step in route.get("steps") or []:
+                if step.get("process_id") in (None, ""):
+                    raise BusinessRuleViolationError(
+                        error_code="SNAPSHOT_ROUTE_STEP_INVALID",
+                        message="快照中的工艺步骤缺少 process_id，无法回写升版",
+                        detail={
+                            "route_id": legacy_route_id,
+                            "step_order": step.get("step_order"),
+                        },
+                    )
+
+                new_step = EngRouteStepBind(
+                    route_id=new_route.id,
+                    process_id=int(step.get("process_id")),
+                    step_order=max(int(step.get("step_order") or 1), 1),
+                    process_type=step.get("process_type") or "IN_HOUSE",
+                    override_equipment_id=step.get("override_equipment_id"),
+                    outsource_price=self._to_decimal_or_none(step.get("outsource_price")),
+                    override_t_set=self._to_decimal_or_none(step.get("override_t_set")),
+                    override_t_run=self._to_decimal_or_none(step.get("override_t_run")),
+                    override_mat_params=json.loads(json.dumps(step.get("override_mat_params"))) if step.get("override_mat_params") is not None else None,
+                    description=step.get("description"),
+                    created_by=operator,
+                    updated_by=operator,
+                )
+                self.db.add(new_step)
+
+        self.db.flush()
+
+    def _to_decimal_or_none(self, value: Any) -> Decimal | None:
+        if value in (None, ""):
+            return None
+        return Decimal(str(value))
 
     def delete(self, snapshot_id: int, operator: str) -> None:
         snapshot = self._get_or_404(snapshot_id)
