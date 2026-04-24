@@ -174,7 +174,6 @@
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import * as echarts from 'echarts'
-import type { ElTable } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
@@ -187,7 +186,7 @@ import {
   FolderOpened,
   Document,
 } from '@element-plus/icons-vue'
-import { getStaticCostLedger, type CostDetail, type BomNode, type CostBreakdown, type StaticCostResult } from '@/api/costing'
+import { getStaticCostLedger, type CostDetail, type BomNode, type CostBreakdown } from '@/api/costing'
 
 interface CostData {
   total_cost: number
@@ -200,7 +199,6 @@ const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
 const expandAll = ref(true)
-const tableRef = ref<InstanceType<typeof ElTable>>()
 const pieChartRef = ref<HTMLElement>()
 let pieChart: echarts.ECharts | null = null
 

@@ -5,20 +5,21 @@
  */
 
 import { ElMessage, ElNotification } from 'element-plus'
-import type { ApiError } from '@/types/common'
 
 /**
  * 错误类型枚举
  */
-export enum ErrorType {
-  NETWORK = 'NETWORK',
-  AUTH = 'AUTH',
-  PERMISSION = 'PERMISSION',
-  VALIDATION = 'VALIDATION',
-  NOT_FOUND = 'NOT_FOUND',
-  SERVER = 'SERVER',
-  UNKNOWN = 'UNKNOWN',
-}
+export const ErrorType = {
+  NETWORK: 'NETWORK',
+  AUTH: 'AUTH',
+  PERMISSION: 'PERMISSION',
+  VALIDATION: 'VALIDATION',
+  NOT_FOUND: 'NOT_FOUND',
+  SERVER: 'SERVER',
+  UNKNOWN: 'UNKNOWN',
+} as const
+
+export type ErrorType = (typeof ErrorType)[keyof typeof ErrorType]
 
 /**
  * 错误信息映射

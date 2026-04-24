@@ -122,13 +122,13 @@ const routes: RouteRecordRaw[] = [
             path: 'snapshot-center',
             name: 'SnapshotCenter',
             component: () => import('@/views/engineering/SnapshotCenterView.vue'),
-            meta: { title: '全景快照中心', requiredPermissionScope: '/engineering/snapshots:read' },
+            meta: { title: '产品快照中心', requiredPermissionScope: '/engineering/snapshots:read' },
           },
           {
             path: 'decision-center',
             name: 'DecisionCenter',
             component: () => import('@/views/engineering/SnapshotCenterView.vue'),
-            meta: { title: '全景快照中心', requiredPermissionScope: '/engineering/snapshots:read' },
+            meta: { title: '仿真结果优选与决策', requiredPermissionScope: '/engineering/snapshots:read' },
           },
           {
             path: 'ledger/:snapshotId?',

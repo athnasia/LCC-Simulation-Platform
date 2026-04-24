@@ -1,207 +1,43 @@
 <template>
   <div class="snapshot-center-view">
     <div class="page-header">
-      <h2>全景快照中心</h2>
-      <span class="subtitle">成本核算与仿真推演数据枢纽</span>
+      <div>
+        <h2>{{ pageTitle }}</h2>
+        <span class="subtitle">{{ pageSubtitle }}</span>
+      </div>
+      <el-tag effect="plain" :type="pageMode === 'decision-center' ? 'success' : 'primary'">
+        {{ currentScopeLabel }}
+      </el-tag>
     </div>
 
     <div class="page-content">
-      <div class="stats-cards">
-        <div class="stat-card">
-          <div class="stat-icon total">
-            <el-icon :size="24"><DocumentCopy /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.totalSnapshots }}</div>
-            <div class="stat-label">快照总数</div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon completed">
-            <el-icon :size="24"><CircleCheck /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.simulationsCompleted }}</div>
-            <div class="stat-label">已完成仿真</div>
-          </div>
-        </div>
-        
-        <div class="stat-card alert">
-          <div class="stat-icon warning">
-            <el-icon :size="24"><Warning /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.costAlerts }}</div>
-            <div class="stat-label">异常预警</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="filter-section">
-        <el-form :inline="true" :model="filterForm" class="filter-form">
-          <el-form-item label="方案/快照">
-            <el-input
-              v-model="filterForm.keyword"
-              placeholder="请输入方案或快照名称"
-              clearable
-              style="width: 220px"
-              @keyup.enter="handleSearch"
-            />
-          </el-form-item>
-          
-          <el-form-item label="状态">
-            <el-select
-              v-model="filterForm.status"
-              placeholder="全部状态"
-              clearable
-              style="width: 140px"
-            >
-              <el-option label="全部" value="" />
-              <el-option label="静态已生成" value="READY" />
-              <el-option label="仿真推演中" value="SIMULATING" />
-              <el-option label="仿真完成" value="COMPLETED" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="生成时间">
-            <el-date-picker
-              v-model="filterForm.dateRange"
-              type="daterange"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-              value-format="YYYY-MM-DD"
-              style="width: 260px"
-            />
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">
-              <el-icon><Search /></el-icon>
-              查询
-            </el-button>
-            <el-button @click="handleReset">
-              <el-icon><Refresh /></el-icon>
-              重置
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div class="table-section">
-        <div class="table-header">
-          <div class="table-header-left">
-            <span class="table-title">快照台账列表</span>
-            <span class="table-count">共 {{ filteredSnapshots.length }} 条记录</span>
-          </div>
-          <div class="table-header-actions">
-            <el-button
-              type="primary"
-              :disabled="!canCompareSelectedSnapshots"
-              @click="handleCompareSnapshots"
-            >
-              📊 多方案 LCC 对标
-            </el-button>
-          </div>
-        </div>
-        
-        <el-table
-          :data="filteredSnapshots"
-          v-loading="loading"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-          style="width: 100%"
+      <div class="tree-panel">
+        <EngineeringStructureTree
+          :nodes="treeData"
+          :loading="loading"
+          :badge-map="snapshotCountByNodeKey"
+          :current-node-key="selectedScopeNode?.key ?? null"
+          title="项目快照树"
+          empty-description="暂无可用项目结构"
+          @node-click="handleScopeNodeClick"
         >
-          <el-table-column type="selection" width="52" fixed="left" />
-          <el-table-column prop="snapshot_code" label="快照编码" width="160" />
-          
-          <el-table-column prop="snapshot_name" label="快照名称" min-width="180">
-            <template #default="{ row }">
-              <div class="snapshot-name">
-                <span>{{ row.snapshot_name }}</span>
-                <span class="scheme-name">{{ row.scheme_name }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          
-          <el-table-column label="总成本" width="140" align="right">
-            <template #default="{ row }">
-              <span class="cost-value">{{ formatCurrency(row.total_cost) }}</span>
-            </template>
-          </el-table-column>
-          
-          <el-table-column prop="created_at" label="生成时间" width="170" />
-          
-          <el-table-column prop="status" label="当前状态" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)" :class="{ 'simulating': row.status === 'SIMULATING' }">
-                <el-icon v-if="row.status === 'SIMULATING'" class="is-loading" style="margin-right: 4px">
-                  <Loading />
-                </el-icon>
-                {{ getStatusText(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          
-          <el-table-column label="操作" width="280" fixed="right" align="center">
-            <template #default="{ row }">
-              <div class="action-buttons">
-                <template v-if="row.status === 'READY'">
-                  <el-button link type="primary" @click="handleViewLedger(row)">
-                    查看台账
-                  </el-button>
-                  <el-button type="primary" size="small" @click="handleStartSimulation(row)">
-                    启动LCC仿真
-                  </el-button>
-                </template>
-                
-                <template v-else-if="row.status === 'SIMULATING'">
-                  <el-button link disabled>
-                    <el-icon class="is-loading"><Loading /></el-icon>
-                    推演中...
-                  </el-button>
-                </template>
-                
-                <template v-else-if="row.status === 'COMPLETED'">
-                  <el-button link type="primary" @click="handleViewLedger(row)">
-                    查看台账
-                  </el-button>
-                  <el-button type="success" size="small" @click="handleViewReport(row)">
-                    查看LCC报告
-                  </el-button>
-                </template>
+          <template #toolbar>
+            <el-button link :disabled="!selectedScopeNode" @click="clearScopeSelection">查看全部</el-button>
+          </template>
+        </EngineeringStructureTree>
+      </div>
 
-                <template v-else-if="row.status === 'FAILED'">
-                  <el-button link type="primary" @click="handleViewLedger(row)">
-                    查看台账
-                  </el-button>
-                  <el-button type="danger" size="small" @click="handleStartSimulation(row)">
-                    重新仿真
-                  </el-button>
-                </template>
-
-                <template v-else>
-                  <el-button link disabled>
-                    暂不可用
-                  </el-button>
-                </template>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        
-        <div class="pagination-section">
-          <el-pagination
-            v-model:current-page="pagination.page"
-            v-model:page-size="pagination.size"
-            :page-sizes="[10, 20, 50, 100]"
-            :total="filteredSnapshots.length"
-            layout="total, sizes, prev, pager, next, jumper"
-            background
-          />
-        </div>
+      <div class="detail-panel">
+        <SnapshotInventoryPanel
+          :loading="loading"
+          :rows="scopeSnapshots"
+          :mode="pageMode"
+          :scope-label="currentScopeLabel"
+          @compare="handleCompareSnapshots"
+          @view-ledger="handleViewLedger"
+          @start-simulation="handleStartSimulation"
+          @view-report="handleViewReport"
+        />
       </div>
 
       <el-dialog
@@ -290,19 +126,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import {
-  DocumentCopy,
-  CircleCheck,
-  Warning,
-  Search,
-  Refresh,
-  Loading,
-} from '@element-plus/icons-vue'
-import { modelSnapshotApi, type ModelSnapshot } from '@/api/engineering'
+import { modelSnapshotApi, designSchemeApi, designSchemeVersionApi, productApi, projectApi, type ModelSnapshot } from '@/api/engineering'
 import { getLccBaselines, getStaticCostLedger, type LccFinancialBaseline } from '@/api/costing'
 import {
   getSimulationStatus,
@@ -311,56 +139,27 @@ import {
   type SimulationResult,
   type SimulationStatusResponse,
 } from '@/api/simulation'
-
-type SnapshotStatus = 'DRAFT' | 'READY' | 'SIMULATING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED'
+import EngineeringStructureTree from '@/components/engineering/EngineeringStructureTree.vue'
+import SnapshotInventoryPanel from '@/components/engineering/SnapshotInventoryPanel.vue'
+import type { SnapshotInventoryRow, SnapshotPageMode, SnapshotStatus } from '@/types/engineeringSnapshots'
+import {
+  buildEngineeringStructureTree,
+  createEngineeringStructureIndex,
+  matchesTreeNodeScope,
+  resolveSnapshotScopeRelation,
+  type EngineeringStructureIndex,
+  type EngineeringTreeNode,
+  type SnapshotScopeRelation,
+} from '@/utils/engineeringStructureTree'
 
 type SnapshotListItem = ModelSnapshot & {
   simulation_result?: SimulationResult | null
 }
 
-interface Snapshot {
-  id: number
-  snapshot_code: string
-  snapshot_name: string
-  scheme_name: string
-  total_cost: number
-  status: SnapshotStatus
-  created_at: string
+type SnapshotRecord = SnapshotInventoryRow & {
   simulation_result: SimulationResult | null
+  relation: SnapshotScopeRelation
 }
-
-const router = useRouter()
-const loading = ref(false)
-const baselineLoading = ref(false)
-const simulationSubmitting = ref(false)
-const simulationDialogVisible = ref(false)
-const simulationFormRef = ref<FormInstance>()
-const baselineOptions = ref<LccFinancialBaseline[]>([])
-const selectedSnapshotForSimulation = ref<Snapshot | null>(null)
-const pollingTimers = new Map<number, number>()
-let isDisposed = false
-
-const stats = reactive({
-  totalSnapshots: 0,
-  simulationsCompleted: 0,
-  costAlerts: 0,
-})
-
-const filterForm = reactive({
-  keyword: '',
-  status: '',
-  dateRange: [] as string[],
-})
-
-const pagination = reactive({
-  page: 1,
-  size: 10,
-  total: 0,
-})
-
-const snapshots = ref<Snapshot[]>([])
-const allSnapshots = ref<SnapshotListItem[]>([])
-const selectedSnapshots = ref<Snapshot[]>([])
 
 interface SimulationFormState {
   baseline_id: number | undefined
@@ -368,6 +167,53 @@ interface SimulationFormState {
   base_mc: number | undefined
   annual_hours: number
 }
+
+const route = useRoute()
+const router = useRouter()
+const loading = ref(false)
+const baselineLoading = ref(false)
+const simulationSubmitting = ref(false)
+const simulationDialogVisible = ref(false)
+const simulationFormRef = ref<FormInstance>()
+const baselineOptions = ref<LccFinancialBaseline[]>([])
+const selectedScopeNode = ref<EngineeringTreeNode | null>(null)
+const selectedSnapshotForSimulation = ref<SnapshotInventoryRow | null>(null)
+const treeData = ref<EngineeringTreeNode[]>([])
+const snapshotRecords = ref<SnapshotRecord[]>([])
+const structureIndex = ref<EngineeringStructureIndex | null>(null)
+const pollingTimers = new Map<number, number>()
+let isDisposed = false
+
+const pageMode = computed<SnapshotPageMode>(() => (route.name === 'DecisionCenter' ? 'decision-center' : 'snapshot-center'))
+const pageTitle = computed(() => (pageMode.value === 'decision-center' ? '仿真结果优选与决策' : '产品快照中心'))
+const pageSubtitle = computed(() => (
+  pageMode.value === 'decision-center'
+    ? '基于项目结构筛选候选快照，并在当前页直接完成多方案 LCC 对标决策。'
+    : '基于项目结构聚合所有已生成快照，统一管理静态台账与仿真推演任务。'
+))
+const currentScopeLabel = computed(() => selectedScopeNode.value?.label ?? '全部项目快照')
+
+const scopeSnapshots = computed<SnapshotInventoryRow[]>(() => {
+  return snapshotRecords.value
+    .filter((item) => matchesTreeNodeScope(item.relation, selectedScopeNode.value))
+    .map(({ relation, simulation_result, ...row }) => row)
+})
+
+const snapshotCountByNodeKey = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const snapshot of snapshotRecords.value) {
+    if (snapshot.relation.projectId !== null) {
+      counts[`project-${snapshot.relation.projectId}`] = (counts[`project-${snapshot.relation.projectId}`] ?? 0) + 1
+    }
+    if (snapshot.relation.productId !== null) {
+      counts[`product-${snapshot.relation.productId}`] = (counts[`product-${snapshot.relation.productId}`] ?? 0) + 1
+    }
+    if (snapshot.relation.schemeId !== null) {
+      counts[`scheme-${snapshot.relation.schemeId}`] = (counts[`scheme-${snapshot.relation.schemeId}`] ?? 0) + 1
+    }
+  }
+  return counts
+})
 
 const createDefaultSimulationForm = (): SimulationFormState => ({
   baseline_id: undefined,
@@ -406,83 +252,14 @@ const simulationRules: FormRules<SimulationFormState> = {
   ],
 }
 
-const filteredSnapshots = computed(() => {
-  let result = [...snapshots.value]
-  
-  if (filterForm.keyword) {
-    const keyword = filterForm.keyword.toLowerCase()
-    result = result.filter(
-      item =>
-        item.snapshot_name.toLowerCase().includes(keyword) ||
-        item.scheme_name.toLowerCase().includes(keyword) ||
-        item.snapshot_code.toLowerCase().includes(keyword)
-    )
-  }
-  
-  if (filterForm.status) {
-    result = result.filter(item => item.status === filterForm.status)
-  }
-  
-  if (filterForm.dateRange && filterForm.dateRange.length === 2) {
-    const [start, end] = filterForm.dateRange
-    result = result.filter(item => {
-      const date = item.created_at.slice(0, 10)
-      return date >= start && date <= end
-    })
-  }
-  
-  return result
-})
-
-const canCompareSelectedSnapshots = computed(() => {
-  return selectedSnapshots.value.length === 2 && selectedSnapshots.value.every(item => item.status === 'COMPLETED')
-})
-
-const formatCurrency = (value: number): string => {
-  return '￥' + value.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-const getStatusType = (status: string): string => {
-  const map: Record<string, string> = {
-    READY: 'primary',
-    SIMULATING: 'warning',
-    COMPLETED: 'success',
-    FAILED: 'danger',
-    DRAFT: 'info',
-    ARCHIVED: 'info',
-  }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string): string => {
-  const map: Record<string, string> = {
-    READY: '静态已生成',
-    SIMULATING: '仿真推演中',
-    COMPLETED: '仿真完成',
-    FAILED: '仿真失败',
-    DRAFT: '草稿',
-    ARCHIVED: '已归档',
-  }
-  return map[status] || status
-}
-
-const syncStats = () => {
-  stats.totalSnapshots = snapshots.value.length
-  stats.simulationsCompleted = snapshots.value.filter(item => item.status === 'COMPLETED').length
-  stats.costAlerts = snapshots.value.filter(item => item.status === 'FAILED').length
-}
-
-const normalizeStatus = (status: string): SnapshotStatus => {
+function normalizeStatus(status: string): SnapshotStatus {
   if (status === 'READY' || status === 'SIMULATING' || status === 'COMPLETED' || status === 'FAILED' || status === 'ARCHIVED') {
     return status
   }
   return 'DRAFT'
 }
 
-const toNumber = (value: unknown): number => {
+function toNumber(value: unknown): number {
   if (typeof value === 'number') {
     return value
   }
@@ -493,7 +270,7 @@ const toNumber = (value: unknown): number => {
   return 0
 }
 
-const extractTotalCost = async (snapshot: SnapshotListItem): Promise<number> => {
+async function extractTotalCost(snapshot: SnapshotListItem): Promise<number> {
   const simulationCost = toNumber(snapshot.simulation_result?.lcc_total_cost)
   if (simulationCost > 0) {
     return simulationCost
@@ -507,37 +284,46 @@ const extractTotalCost = async (snapshot: SnapshotListItem): Promise<number> => 
   }
 }
 
-const buildSnapshotRow = async (snapshot: SnapshotListItem): Promise<Snapshot> => {
+async function buildSnapshotRecord(snapshot: SnapshotListItem, index: EngineeringStructureIndex): Promise<SnapshotRecord> {
+  const version = index.versionsById.get(snapshot.scheme_version_id) ?? null
+  const scheme = version ? index.schemesById.get(version.scheme_id) ?? null : null
+  const product = scheme ? index.productsById.get(scheme.product_id) ?? null : null
+  const project = product ? index.projectsById.get(product.project_id) ?? null : null
+
   return {
     id: snapshot.id,
     snapshot_code: snapshot.snapshot_code,
     snapshot_name: snapshot.snapshot_name,
-    scheme_name: `版本 #${snapshot.scheme_version_id}`,
+    project_name: project?.name ?? '未关联项目',
+    product_name: product?.name ?? '未关联产品',
+    scheme_name: scheme?.name ?? '未关联方案',
+    version_label: version ? `V${version.version}` : `版本 #${snapshot.scheme_version_id}`,
     total_cost: await extractTotalCost(snapshot),
     status: normalizeStatus(snapshot.status),
     created_at: snapshot.created_at,
     simulation_result: snapshot.simulation_result ?? null,
+    relation: resolveSnapshotScopeRelation(snapshot, index),
   }
 }
 
-const resetSimulationForm = () => {
+function resetSimulationForm() {
   Object.assign(simulationForm, createDefaultSimulationForm())
   simulationFormRef.value?.clearValidate()
 }
 
-const updateSnapshotRow = (snapshotId: number, patch: Partial<Snapshot>) => {
-  const index = snapshots.value.findIndex(item => item.id === snapshotId)
+function updateSnapshotRow(snapshotId: number, patch: Partial<SnapshotRecord>) {
+  const index = snapshotRecords.value.findIndex((item) => item.id === snapshotId)
   if (index === -1) {
     return
   }
-  snapshots.value[index] = {
-    ...snapshots.value[index],
+
+  snapshotRecords.value[index] = {
+    ...snapshotRecords.value[index],
     ...patch,
   }
-  syncStats()
 }
 
-const clearPolling = (snapshotId: number) => {
+function clearPolling(snapshotId: number) {
   const timerId = pollingTimers.get(snapshotId)
   if (timerId !== undefined) {
     window.clearTimeout(timerId)
@@ -545,22 +331,22 @@ const clearPolling = (snapshotId: number) => {
   }
 }
 
-const clearAllPolling = () => {
+function clearAllPolling() {
   pollingTimers.forEach((timerId) => {
     window.clearTimeout(timerId)
   })
   pollingTimers.clear()
 }
 
-const applySimulationStatus = (snapshotId: number, payload: SimulationStatusResponse) => {
-  const currentRow = snapshots.value.find(item => item.id === snapshotId)
+function applySimulationStatus(snapshotId: number, payload: SimulationStatusResponse) {
+  const currentRow = snapshotRecords.value.find((item) => item.id === snapshotId)
   if (!currentRow) {
     return
   }
 
   const nextStatus = normalizeStatus(payload.status)
   const simulationResult = payload.simulation_result ?? null
-  const patch: Partial<Snapshot> = {
+  const patch: Partial<SnapshotRecord> = {
     simulation_result: simulationResult,
   }
 
@@ -575,7 +361,7 @@ const applySimulationStatus = (snapshotId: number, payload: SimulationStatusResp
   updateSnapshotRow(snapshotId, patch)
 }
 
-const pollSimulationStatus = async (snapshotId: number) => {
+async function pollSimulationStatus(snapshotId: number) {
   if (isDisposed) {
     clearPolling(snapshotId)
     return
@@ -604,33 +390,38 @@ const pollSimulationStatus = async (snapshotId: number) => {
   }
 }
 
-const loadSnapshots = async () => {
+async function loadStructureAndSnapshots() {
   loading.value = true
-  
   try {
-    const res = await modelSnapshotApi.list({ size: 100 })
-    allSnapshots.value = (res.data.items || []) as SnapshotListItem[]
+    const [projectsRes, productsRes, schemesRes, versionsRes, snapshotsRes] = await Promise.all([
+      projectApi.list({ size: 200 }),
+      productApi.list({ size: 500 }),
+      designSchemeApi.list({ size: 500 }),
+      designSchemeVersionApi.list({ size: 500 }),
+      modelSnapshotApi.list({ size: 500 }),
+    ])
 
-    const snapshotList = await Promise.all(allSnapshots.value.map(snapshot => buildSnapshotRow(snapshot)))
-    if (isDisposed) {
-      return
-    }
+    const projects = projectsRes.data.items || []
+    const products = productsRes.data.items || []
+    const schemes = schemesRes.data.items || []
+    const versions = versionsRes.data.items || []
+    const index = createEngineeringStructureIndex(projects, products, schemes, versions)
 
-    snapshots.value = snapshotList
-    selectedSnapshots.value = []
-    pagination.total = snapshotList.length
-    syncStats()
+    structureIndex.value = index
+    treeData.value = buildEngineeringStructureTree(projects, products, schemes)
+    snapshotRecords.value = await Promise.all(
+      ((snapshotsRes.data.items || []) as SnapshotListItem[]).map((snapshot) => buildSnapshotRecord(snapshot, index)),
+    )
   } catch (error: any) {
-    console.error('加载快照列表失败:', error)
-    ElMessage.error(error.response?.data?.message || '加载快照列表失败')
+    console.error('加载快照结构失败:', error)
+    ElMessage.error(error.response?.data?.message || '加载快照结构失败')
   } finally {
     loading.value = false
   }
 }
 
-const loadBaselineOptions = async () => {
+async function loadBaselineOptions() {
   baselineLoading.value = true
-
   try {
     const res = await getLccBaselines({ is_active: true, page: 1, size: 200 })
     baselineOptions.value = res.data.items ?? []
@@ -642,55 +433,47 @@ const loadBaselineOptions = async () => {
   }
 }
 
-const handleSearch = () => {
-  pagination.page = 1
-  selectedSnapshots.value = []
+function handleScopeNodeClick(node: EngineeringTreeNode) {
+  selectedScopeNode.value = node
 }
 
-const handleReset = () => {
-  filterForm.keyword = ''
-  filterForm.status = ''
-  filterForm.dateRange = []
-  pagination.page = 1
-  selectedSnapshots.value = []
+function clearScopeSelection() {
+  selectedScopeNode.value = null
 }
 
-const handleSelectionChange = (rows: Snapshot[]) => {
-  selectedSnapshots.value = rows
-}
-
-const handleCompareSnapshots = () => {
-  if (!canCompareSelectedSnapshots.value) {
+function handleCompareSnapshots(rows: SnapshotInventoryRow[]) {
+  if (rows.length !== 2) {
     return
   }
 
-  const [first, second] = selectedSnapshots.value
+  const [first, second] = rows
   router.push({
     path: '/engineering/lcc-compare',
     query: {
       sid1: String(first.id),
       sid2: String(second.id),
+      source: pageMode.value,
     },
   })
 }
 
-const handleViewLedger = (row: Snapshot) => {
+function handleViewLedger(row: SnapshotInventoryRow) {
   router.push(`/engineering/cost-ledger/${row.id}`)
 }
 
-const handleStartSimulation = (row: Snapshot) => {
+function handleStartSimulation(row: SnapshotInventoryRow) {
   selectedSnapshotForSimulation.value = row
   resetSimulationForm()
   simulationDialogVisible.value = true
 }
 
-const handleCancelSimulationDialog = () => {
+function handleCancelSimulationDialog() {
   simulationDialogVisible.value = false
   selectedSnapshotForSimulation.value = null
   resetSimulationForm()
 }
 
-const handleConfirmSimulation = async () => {
+async function handleConfirmSimulation() {
   const currentRow = selectedSnapshotForSimulation.value
   if (!currentRow) {
     return
@@ -710,7 +493,6 @@ const handleConfirmSimulation = async () => {
   }
 
   simulationSubmitting.value = true
-
   try {
     clearPolling(currentRow.id)
     await startLccSimulation(payload)
@@ -719,7 +501,6 @@ const handleConfirmSimulation = async () => {
     selectedSnapshotForSimulation.value = null
     resetSimulationForm()
 
-    await loadSnapshots()
     updateSnapshotRow(currentRow.id, {
       status: 'SIMULATING',
       simulation_result: {
@@ -745,17 +526,12 @@ const handleConfirmSimulation = async () => {
   }
 }
 
-const handleViewReport = (row: Snapshot) => {
+function handleViewReport(row: SnapshotInventoryRow) {
   router.push(`/costing/lcc-report/${row.id}`)
 }
 
-watch(filteredSnapshots, (rows) => {
-  const visibleIds = new Set(rows.map(item => item.id))
-  selectedSnapshots.value = selectedSnapshots.value.filter(item => visibleIds.has(item.id))
-})
-
 onMounted(() => {
-  void Promise.all([loadSnapshots(), loadBaselineOptions()])
+  void Promise.all([loadStructureAndSnapshots(), loadBaselineOptions()])
 })
 
 onUnmounted(() => {
@@ -766,15 +542,17 @@ onUnmounted(() => {
 
 <style scoped>
 .snapshot-center-view {
-  min-height: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   background-color: #f5f7fa;
-  padding: 0;
 }
 
 .page-header {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
   padding: 20px 24px;
   background-color: #fff;
   border-bottom: 1px solid #e4e7ed;
@@ -787,184 +565,39 @@ onUnmounted(() => {
   color: #303133;
 }
 
-.page-header .subtitle {
+.subtitle {
+  display: inline-block;
+  margin-top: 4px;
   font-size: 14px;
   color: #909399;
 }
 
 .page-content {
-  padding: 20px 24px;
-}
-
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card.alert {
-  border-left: 4px solid #f56c6c;
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-}
-
-.stat-icon.total {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
-}
-
-.stat-icon.completed {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-}
-
-.stat-icon.warning {
-  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
-}
-
-.stat-content {
   flex: 1;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #303133;
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.filter-section {
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.filter-form {
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
-  margin-right: 16px;
-}
-
-.filter-form :deep(.el-form-item:last-child) {
-  margin-right: 0;
-}
-
-.table-section {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-
-.table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   gap: 16px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #ebeef5;
+  padding: 20px 24px;
 }
 
-.table-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.tree-panel,
+.detail-panel {
+  min-height: 0;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.table-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.tree-panel {
+  width: 360px;
+  min-width: 320px;
+  padding: 16px;
 }
 
-.table-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.table-count {
-  font-size: 13px;
-  color: #909399;
-}
-
-.snapshot-name {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.snapshot-name .scheme-name {
-  font-size: 12px;
-  color: #909399;
-}
-
-.cost-value {
-  font-weight: 600;
-  color: #303133;
-  font-family: 'Monaco', 'Menlo', monospace;
-}
-
-.action-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-
-.el-tag.simulating {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.pagination-section {
-  display: flex;
-  justify-content: flex-end;
-  padding: 16px 20px;
-  border-top: 1px solid #ebeef5;
+.detail-panel {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
 }
 
 .number-input-group {

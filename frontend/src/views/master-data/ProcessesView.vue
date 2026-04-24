@@ -1,39 +1,77 @@
 <template>
   <div class="flex flex-col md:flex-row gap-4 h-full w-full min-h-0">
-    <!-- 左侧分类树 -->
-    <el-card class="w-full md:w-64 flex-shrink-0 flex flex-col h-[300px] md:h-auto" shadow="never" :body-style="{ padding: '12px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }">
+    <el-card class="w-full md:w-72 flex-shrink-0 flex flex-col h-[300px] md:h-auto" shadow="never" :body-style="{ padding: '12px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="text-sm font-medium">工序分类</span>
+          <span class="text-sm font-medium">工艺树</span>
         </div>
       </template>
 
       <el-scrollbar class="flex-1 min-h-0">
         <el-tree
-          v-if="categoryTree.length > 0"
-          :data="categoryTree"
-          node-key="id"
+          v-if="processTree.length > 0"
+          :data="processTree"
+          node-key="key"
           default-expand-all
           highlight-current
           :expand-on-click-node="false"
-          :current-node-key="queryState.category_id ?? undefined"
+          :current-node-key="selectedTreeNodeKey"
           :props="{ children: 'children', label: 'name' }"
           class="category-tree"
-          @node-click="handleCategoryNodeClick"
+          @node-click="handleTreeNodeClick"
         >
           <template #default="{ data }">
-            <div class="flex items-center justify-between w-full gap-2 pr-1 text-sm">
-              <span class="truncate">{{ data.name }}</span>
+            <div class="flex items-center justify-between w-full gap-2 pr-1 py-1 text-sm">
+              <div class="flex min-w-0 items-center gap-2">
+                <span
+                  class="flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-semibold"
+                  :class="
+                    data.nodeType === 'root'
+                      ? 'bg-slate-800 text-white'
+                      : data.nodeType === 'category'
+                        ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                        : 'border border-sky-200 bg-sky-50 text-sky-700'
+                  "
+                >
+                  {{ data.nodeType === 'root' ? '总' : data.nodeType === 'category' ? '类' : '工' }}
+                </span>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="truncate" :class="data.nodeType === 'root' ? 'font-semibold text-slate-800' : 'text-slate-700'">
+                    {{ data.name }}
+                  </span>
+                  <span v-if="data.nodeType === 'category'" class="text-xs text-slate-400">分类</span>
+                  <span v-else-if="data.nodeType === 'process'" class="text-xs text-slate-400">工艺</span>
+                </div>
+              </div>
+              <div class="flex flex-none items-center gap-1">
+                <el-tag v-if="data.nodeType === 'root'" size="small" type="primary" effect="light">
+                  {{ data.categoryCount ?? 0 }} 类
+                </el-tag>
+                <el-tag
+                  v-if="data.nodeType === 'root' && (data.uncategorizedCount ?? 0) > 0"
+                  size="small"
+                  type="warning"
+                  effect="light"
+                >
+                  {{ data.uncategorizedCount }} 未归类
+                </el-tag>
+                <el-tag
+                  v-if="typeof data.count === 'number' && data.nodeType !== 'process'"
+                  size="small"
+                  :type="data.nodeType === 'root' ? 'success' : 'info'"
+                  effect="plain"
+                >
+                  {{ data.count }} 项
+                </el-tag>
+              </div>
             </div>
           </template>
         </el-tree>
-        <el-empty v-else :image-size="48" description="暂无分类" />
+        <el-empty v-else :image-size="48" description="暂无工艺结构" />
       </el-scrollbar>
     </el-card>
 
-    <!-- 右侧内容区 -->
     <div class="flex-1 flex flex-col gap-3 min-w-0">
-      <!-- 搜索栏 -->
       <el-card shadow="never" body-style="padding:12px 16px">
         <div class="flex items-center gap-3">
           <el-input
@@ -54,7 +92,6 @@
         </div>
       </el-card>
 
-      <!-- 表格区 -->
       <el-card shadow="never" class="flex-1 flex flex-col min-h-0" :body-style="{ padding: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }">
         <el-table
           v-loading="loading"
@@ -65,7 +102,7 @@
         >
           <el-table-column prop="code" label="编码" width="130" />
           <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
-          <el-table-column label="分类" width="120">
+          <el-table-column label="分类" width="140">
             <template #default="{ row }">
               <span v-if="row.category">{{ row.category.name }}</span>
               <span v-else class="text-gray-400">-</span>
@@ -121,32 +158,116 @@
       v-model="dialogVisible"
       :data="currentProcess"
       :category-tree="categoryTree"
-      @success="handleSearch"
+      @success="handleDialogSuccess"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { resourceCategoryApi, processApi } from '@/api/masterData'
-import type { ResourceCategory, Process, ProcessQuery } from '@/api/masterData'
+import { resourceCategoryApi, processApi, ResourceType } from '@/api/masterData'
+import type { ResourceCategoryTree, Process, ProcessQuery } from '@/api/masterData'
 import ProcessFormDialog from '@/components/master-data/ProcessFormDialog.vue'
+
+type ProcessTreeNodeType = 'root' | 'category' | 'process'
+
+interface ProcessTreeNode {
+  key: string
+  name: string
+  nodeType: ProcessTreeNodeType
+  categoryId?: number
+  processId?: number
+  categoryCount?: number
+  uncategorizedCount?: number
+  count?: number
+  children?: ProcessTreeNode[]
+}
 
 const loading = ref(false)
 const dialogVisible = ref(false)
 const processList = ref<Process[]>([])
-const categoryTree = ref<ResourceCategory[]>([])
+const categoryTree = ref<ResourceCategoryTree[]>([])
+const treeProcesses = ref<Process[]>([])
 const total = ref(0)
 const currentProcess = ref<Process | null>(null)
+const selectedTreeNodeKey = ref('process-root')
 
 const queryState = reactive<ProcessQuery>({
   keyword: '',
   category_id: undefined,
   is_active: undefined,
   page: 1,
-  size: 20
+  size: 20,
+})
+
+const processTree = computed<ProcessTreeNode[]>(() => {
+  const categoryProcessMap = new Map<number, Process[]>()
+  const uncategorizedProcesses: Process[] = []
+
+  for (const item of treeProcesses.value) {
+    if (item.category_id) {
+      if (!categoryProcessMap.has(item.category_id)) {
+        categoryProcessMap.set(item.category_id, [])
+      }
+      categoryProcessMap.get(item.category_id)?.push(item)
+    } else {
+      uncategorizedProcesses.push(item)
+    }
+  }
+
+  const categoryNodes = categoryTree.value.map<ProcessTreeNode>((category) => {
+    const processChildren = (categoryProcessMap.get(category.id) || [])
+      .slice()
+      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+      .map<ProcessTreeNode>((item) => ({
+        key: `process-${item.id}`,
+        name: item.name,
+        nodeType: 'process',
+        categoryId: category.id,
+        processId: item.id,
+      }))
+
+    return {
+      key: `category-${category.id}`,
+      name: category.name,
+      nodeType: 'category',
+      categoryId: category.id,
+      count: processChildren.length,
+      children: processChildren,
+    }
+  })
+
+  if (uncategorizedProcesses.length > 0) {
+    categoryNodes.push({
+      key: 'category-uncategorized',
+      name: '未分类工艺',
+      nodeType: 'category',
+      count: uncategorizedProcesses.length,
+      children: uncategorizedProcesses
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+        .map<ProcessTreeNode>((item) => ({
+          key: `process-${item.id}`,
+          name: item.name,
+          nodeType: 'process',
+          processId: item.id,
+        })),
+    })
+  }
+
+  return [
+    {
+      key: 'process-root',
+      name: '工艺',
+      nodeType: 'root',
+      categoryCount: categoryTree.value.length,
+      uncategorizedCount: uncategorizedProcesses.length,
+      count: treeProcesses.value.length,
+      children: categoryNodes,
+    },
+  ]
 })
 
 function formatDate(dateStr: string) {
@@ -157,25 +278,37 @@ function formatDate(dateStr: string) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   })
 }
 
 async function loadCategoryTree() {
   try {
-    const res = await resourceCategoryApi.tree('PROCESS')
+    const res = await resourceCategoryApi.tree(ResourceType.PROCESS)
     categoryTree.value = res.data
   } catch (err) {
     console.error('Failed to load category tree:', err)
   }
 }
 
-function handleCategoryNodeClick(node: ResourceCategory) {
-  if (queryState.category_id === node.id) {
+async function loadTreeProcesses() {
+  try {
+    const res = await processApi.list({ page: 1, size: 1000 })
+    treeProcesses.value = res.data.items || []
+  } catch (error) {
+    console.error('Failed to load process tree items:', error)
+  }
+}
+
+function handleTreeNodeClick(node: ProcessTreeNode) {
+  selectedTreeNodeKey.value = node.key
+
+  if (node.nodeType === 'root') {
     queryState.category_id = undefined
   } else {
-    queryState.category_id = node.id
+    queryState.category_id = node.categoryId
   }
+
   handleSearch()
 }
 
@@ -194,7 +327,7 @@ async function fetchData() {
 
 function handleSearch() {
   queryState.page = 1
-  fetchData()
+  void fetchData()
 }
 
 function openCreateDialog() {
@@ -217,7 +350,7 @@ async function handleDelete(row: Process) {
     })
     await processApi.remove(row.id)
     ElMessage.success('删除成功')
-    fetchData()
+    await Promise.all([fetchData(), loadTreeProcesses()])
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -226,9 +359,12 @@ async function handleDelete(row: Process) {
   }
 }
 
+async function handleDialogSuccess() {
+  await Promise.all([fetchData(), loadTreeProcesses()])
+}
+
 onMounted(() => {
-  loadCategoryTree()
-  fetchData()
+  void Promise.all([loadCategoryTree(), loadTreeProcesses(), fetchData()])
 })
 </script>
 
@@ -239,7 +375,7 @@ onMounted(() => {
 }
 
 :deep(.el-tree-node__content) {
-  height: 32px;
+  height: 36px;
 }
 
 :deep(.el-tree-node.is-current > .el-tree-node__content) {

@@ -416,7 +416,7 @@ class EquipmentResponse(EquipmentBase):
 class ProcessBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="工序名称")
     code: str = Field(..., min_length=1, max_length=50, description="工序编码（变量标识）")
-    category_id: int | None = Field(None, description="工序分类 ID")
+    category_id: int = Field(..., description="工序分类 ID")
     standard_time: Decimal | None = Field(None, ge=0, description="标准工时（小时）")
     setup_time: Decimal | None = Field(None, ge=0, description="换产准备时间（小时）")
     dynamic_attributes: dict[str, Any] | None = Field(None, description="柔性属性")

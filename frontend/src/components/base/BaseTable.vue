@@ -59,8 +59,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import type { TableInstance, TableColumnInstance } from 'element-plus'
+import { ref, watch } from 'vue'
+import type { TableInstance } from 'element-plus'
 
 export interface TableColumn {
   prop: string
@@ -71,7 +71,7 @@ export interface TableColumn {
   sortable?: boolean | 'custom'
   align?: 'left' | 'center' | 'right'
   slot?: string
-  formatter?: (row: any, column: TableColumnInstance, cellValue: any, index: number) => string
+  formatter?: (row: any, column: TableColumn, cellValue: any, index: number) => string
 }
 
 const props = withDefaults(defineProps<{

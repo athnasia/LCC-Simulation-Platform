@@ -74,6 +74,10 @@ def init_resource_categories(db: Session) -> dict[str, int]:
         {"name": "检测设备", "code": "CAT_INSPECTION", "resource_type": ResourceType.EQUIPMENT, "description": "检测设备分类"},
         {"name": "焊接工", "code": "CAT_WELDER", "resource_type": ResourceType.LABOR, "description": "焊接工种"},
         {"name": "装配工", "code": "CAT_ASSEMBLER", "resource_type": ResourceType.LABOR, "description": "装配工种"},
+        {"name": "机加工", "code": "PROCESS_MACHINING", "resource_type": ResourceType.PROCESS, "description": "车削、铣削、钻孔、磨削等切削加工工艺"},
+        {"name": "连接与装配", "code": "PROCESS_JOINING_ASSEMBLY", "resource_type": ResourceType.PROCESS, "description": "焊接与装配类工艺"},
+        {"name": "热处理", "code": "PROCESS_HEAT_TREATMENT", "resource_type": ResourceType.PROCESS, "description": "热处理类工艺"},
+        {"name": "表面处理", "code": "PROCESS_SURFACE_TREATMENT", "resource_type": ResourceType.PROCESS, "description": "表面处理类工艺"},
     ]
 
     category_ids = {}
@@ -136,25 +140,26 @@ def init_attr_definitions(db: Session) -> None:
     print(f"已创建 {len(attrs)} 个属性定义")
 
 
-def init_processes(db: Session) -> None:
+def init_processes(db: Session, category_ids: dict[str, int]) -> None:
     """初始化标准工序"""
     print("初始化标准工序...")
 
     processes = [
-        {"name": "车削", "code": "PROC_TURNING", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "车削加工工序"},
-        {"name": "铣削", "code": "PROC_MILLING", "standard_time": Decimal("0.75"), "setup_time": Decimal("0.5"), "description": "铣削加工工序"},
-        {"name": "钻孔", "code": "PROC_DRILLING", "standard_time": Decimal("0.25"), "setup_time": Decimal("0.15"), "description": "钻孔加工工序"},
-        {"name": "磨削", "code": "PROC_GRINDING", "standard_time": Decimal("1.0"), "setup_time": Decimal("0.5"), "description": "磨削加工工序"},
-        {"name": "焊接", "code": "PROC_WELDING", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.3"), "description": "焊接工序"},
-        {"name": "装配", "code": "PROC_ASSEMBLY", "standard_time": Decimal("1.5"), "setup_time": Decimal("0.5"), "description": "装配工序"},
-        {"name": "热处理", "code": "PROC_HEAT_TREATMENT", "standard_time": Decimal("2.0"), "setup_time": Decimal("1.0"), "description": "热处理工序"},
-        {"name": "表面处理", "code": "PROC_SURFACE_TREATMENT", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "表面处理工序"},
+        {"name": "车削", "code": "PROC_TURNING", "category_code": "PROCESS_MACHINING", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "车削加工工序"},
+        {"name": "铣削", "code": "PROC_MILLING", "category_code": "PROCESS_MACHINING", "standard_time": Decimal("0.75"), "setup_time": Decimal("0.5"), "description": "铣削加工工序"},
+        {"name": "钻孔", "code": "PROC_DRILLING", "category_code": "PROCESS_MACHINING", "standard_time": Decimal("0.25"), "setup_time": Decimal("0.15"), "description": "钻孔加工工序"},
+        {"name": "磨削", "code": "PROC_GRINDING", "category_code": "PROCESS_MACHINING", "standard_time": Decimal("1.0"), "setup_time": Decimal("0.5"), "description": "磨削加工工序"},
+        {"name": "焊接", "code": "PROC_WELDING", "category_code": "PROCESS_JOINING_ASSEMBLY", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.3"), "description": "焊接工序"},
+        {"name": "装配", "code": "PROC_ASSEMBLY", "category_code": "PROCESS_JOINING_ASSEMBLY", "standard_time": Decimal("1.5"), "setup_time": Decimal("0.5"), "description": "装配工序"},
+        {"name": "热处理", "code": "PROC_HEAT_TREATMENT", "category_code": "PROCESS_HEAT_TREATMENT", "standard_time": Decimal("2.0"), "setup_time": Decimal("1.0"), "description": "热处理工序"},
+        {"name": "表面处理", "code": "PROC_SURFACE_TREATMENT", "category_code": "PROCESS_SURFACE_TREATMENT", "standard_time": Decimal("0.5"), "setup_time": Decimal("0.25"), "description": "表面处理工序"},
     ]
 
     for proc_data in processes:
         proc = MdProcess(
             name=proc_data["name"],
             code=proc_data["code"],
+            category_id=category_ids[proc_data["category_code"]],
             standard_time=proc_data["standard_time"],
             setup_time=proc_data["setup_time"],
             description=proc_data.get("description"),
@@ -232,9 +237,9 @@ def main():
     db = SessionLocal()
     try:
         clear_master_data(db)
-        init_resource_categories(db)
+        category_ids = init_resource_categories(db)
         init_attr_definitions(db)
-        init_processes(db)
+        init_processes(db, category_ids)
         init_energy_rates(db)
         print("\n主数据种子数据初始化完成！")
     except Exception as e:

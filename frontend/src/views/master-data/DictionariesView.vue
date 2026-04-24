@@ -1,46 +1,46 @@
 ﻿<template>
   <div class="dictionary-page flex h-full min-h-0 flex-col gap-4 p-6">
-    <div class="page-header flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Module 02</p>
-        <h2 class="mt-2 text-2xl font-semibold text-slate-900">基础字典与模板</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+    <div class="page-header flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-600">Module 02</p>
+        <h2 class="mt-1 text-2xl font-semibold text-slate-900">基础字典与模板</h2>
+        <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
           统一维护量纲、单位与柔性属性模板，确保材料台账、设备能力库与成本公式引擎使用同一套主数据底座。
         </p>
       </div>
-      <div class="grid gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 sm:grid-cols-3 sm:gap-6">
-        <div>
-          <div class="stat-label">量纲</div>
-          <div class="stat-value">{{ dimensionList.length }}</div>
+      <div class="header-stats flex items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2 text-sm text-slate-600 lg:flex-nowrap">
+        <div class="header-stat-item">
+          <span class="stat-label">量纲数</span>
+          <span class="stat-value">{{ summaryStats.dimensions }}</span>
         </div>
-        <div>
-          <div class="stat-label">当前量纲单位</div>
-          <div class="stat-value">{{ allUnitsInDimension.length }}</div>
+        <el-divider direction="vertical" />
+        <div class="header-stat-item">
+          <span class="stat-label">单位数</span>
+          <span class="stat-value">{{ summaryStats.units }}</span>
         </div>
-        <div>
-          <div class="stat-label">柔性属性</div>
-          <div class="stat-value">{{ attrPagination.total }}</div>
+        <el-divider direction="vertical" />
+        <div class="header-stat-item">
+          <span class="stat-label">属性数</span>
+          <span class="stat-value">{{ summaryStats.attributes }}</span>
         </div>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" class="flex-1 min-h-0">
       <el-tab-pane label="计量单位管理" name="units" class="h-full">
-        <div class="grid h-full min-h-0 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <el-card shadow="never" class="min-h-0 border-slate-200" body-style="padding:16px; display:flex; flex-direction:column; min-height:0;">
-            <template #header>
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <div class="text-base font-semibold text-slate-900">量纲选择</div>
-                  <div class="mt-1 text-xs text-slate-500">先选量纲，再维护所属单位</div>
-                </div>
-                <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openDimensionDialog()">
-                  新建量纲
-                </el-button>
-              </div>
-            </template>
+        <div class="grid h-full min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <div class="dimension-sidebar flex min-h-0 flex-col rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-sm">
+            <el-button
+              v-if="canWrite"
+              plain
+              :icon="Plus"
+              class="dimension-create-button mb-3 w-full"
+              @click="openDimensionDialog()"
+            >
+              新建量纲
+            </el-button>
 
-            <div class="mb-4 flex items-center gap-2">
+            <div class="mb-3 flex items-center gap-2">
               <el-input
                 v-model="dimensionKeyword"
                 clearable
@@ -53,53 +53,46 @@
             </div>
 
             <div v-loading="dimensionLoading" class="min-h-0 flex-1 overflow-hidden">
-              <el-scrollbar max-height="calc(100vh - 340px)">
-                <div v-if="dimensionList.length > 0" class="flex flex-col gap-3 pr-2">
-                  <button
-                    v-for="dimension in dimensionList"
-                    :key="dimension.id"
-                    type="button"
-                    class="dimension-card text-left"
-                    :class="{ 'dimension-card--active': selectedDimensionId === dimension.id }"
-                    @click="selectDimension(dimension.id)"
-                  >
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="min-w-0">
+              <el-scrollbar max-height="calc(100vh - 308px)">
+                <ul v-if="dimensionList.length > 0" class="dimension-menu pr-1">
+                  <li v-for="dimension in dimensionList" :key="dimension.id">
+                    <button
+                      type="button"
+                      class="dimension-menu__item"
+                      :class="{ 'dimension-menu__item--active': selectedDimensionId === dimension.id }"
+                      @click="selectDimension(dimension.id)"
+                    >
+                      <div class="min-w-0 flex-1 text-left">
                         <div class="truncate text-sm font-semibold text-slate-900">{{ dimension.name }}</div>
-                        <div class="mt-1 text-xs uppercase tracking-[0.22em] text-slate-400">{{ dimension.code }}</div>
+                        <div class="mt-0.5 truncate text-[11px] uppercase tracking-[0.22em] text-slate-400">
+                          {{ dimension.code }}
+                        </div>
                       </div>
-                      <div class="flex items-center gap-2">
-                        <el-button
+                      <div class="dimension-menu__actions">
+                        <button
                           v-if="canWrite"
-                          link
-                          type="primary"
+                          type="button"
+                          class="dimension-menu__icon dimension-menu__icon--edit"
                           @click.stop="openDimensionDialog(dimension)"
                         >
-                          编辑
-                        </el-button>
-                        <el-button
+                          <el-icon><Edit /></el-icon>
+                        </button>
+                        <button
                           v-if="canDelete"
-                          link
-                          type="danger"
+                          type="button"
+                          class="dimension-menu__icon dimension-menu__icon--delete"
                           @click.stop="deleteDimension(dimension)"
                         >
-                          删除
-                        </el-button>
+                          <el-icon><Delete /></el-icon>
+                        </button>
                       </div>
-                    </div>
-                    <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
-                      <span>排序 {{ dimension.sort_order }}</span>
-                      <span>{{ formatDate(dimension.updated_at) }}</span>
-                    </div>
-                    <p class="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                      {{ dimension.description || '暂无描述' }}
-                    </p>
-                  </button>
-                </div>
+                    </button>
+                  </li>
+                </ul>
                 <el-empty v-else :image-size="56" description="暂无量纲数据" />
               </el-scrollbar>
             </div>
-          </el-card>
+          </div>
 
           <el-card shadow="never" class="min-h-0 border-slate-200" body-style="padding:0; display:flex; flex-direction:column; min-height:0;">
             <template #header>
@@ -108,17 +101,7 @@
                   <div class="text-base font-semibold text-slate-900">
                     {{ selectedDimension ? `${selectedDimension.name} 单位台账` : '单位台账' }}
                   </div>
-                  <div class="mt-1 text-xs text-slate-500">
-                    <template v-if="selectedDimension && baseUnit">
-                      当前基准单位：{{ baseUnit.name }}（{{ baseUnit.symbol || baseUnit.code }}）
-                    </template>
-                    <template v-else-if="selectedDimension">
-                      当前量纲尚未配置基准单位，请优先创建基准单位。
-                    </template>
-                    <template v-else>
-                      请先在左侧选择量纲。
-                    </template>
-                  </div>
+                  <div class="mt-1 text-xs text-slate-500">按量纲集中维护单位台账与换算关系。</div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <el-input
@@ -147,6 +130,23 @@
             </template>
 
             <div v-if="selectedDimension" class="flex min-h-0 flex-1 flex-col">
+              <div class="px-4 pt-4">
+                <el-alert
+                  :type="baseUnit ? 'success' : 'warning'"
+                  :closable="false"
+                  show-icon
+                >
+                  <template #title>
+                    <template v-if="baseUnit">
+                      当前基准单位：{{ baseUnit.name }}（{{ baseUnit.symbol || baseUnit.code }}）
+                    </template>
+                    <template v-else>
+                      当前量纲尚未配置基准单位，请优先创建基准单位。
+                    </template>
+                  </template>
+                </el-alert>
+              </div>
+
               <el-table
                 v-loading="unitLoading"
                 :data="unitList"
@@ -170,14 +170,14 @@
                 <el-table-column label="转换系数" min-width="220">
                   <template #default="{ row }">
                     <template v-if="row.is_base">
-                      <div class="text-sm font-medium text-emerald-600">1（基准）</div>
+                      <el-tag type="success" effect="dark" size="small">基准</el-tag>
                     </template>
                     <template v-else>
-                      <div class="text-sm font-medium text-slate-800">
-                        {{ formatFactor(conversionFactorMap[row.id]) }}
-                      </div>
-                      <div class="mt-1 text-xs text-slate-500">
+                      <div class="unit-formula-chip">
                         {{ formatUnitFormula(row) }}
+                      </div>
+                      <div class="mt-2 text-xs text-slate-500">
+                        换算系数：{{ formatFactor(conversionFactorMap[row.id]) }}
                       </div>
                     </template>
                   </template>
@@ -221,24 +221,27 @@
       <el-tab-pane label="柔性属性模板" name="attributes" class="h-full">
         <el-card shadow="never" class="min-h-0 border-slate-200" body-style="padding:0; display:flex; flex-direction:column; min-height:0;">
           <template #header>
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <div class="text-base font-semibold text-slate-900">柔性属性模板</div>
-                <div class="mt-1 text-xs text-slate-500">
-                  为材料、设备等资源定义可扩展属性，供主数据录入和公式解析引擎统一复用。
-                </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900">柔性属性模板</div>
+              <div class="mt-1 text-xs text-slate-500">
+                为材料、设备等资源定义可扩展属性，供主数据录入和公式解析引擎统一复用。
               </div>
-              <div class="flex flex-wrap items-center gap-2">
+            </div>
+          </template>
+
+          <div class="flex min-h-0 flex-1 flex-col">
+            <div class="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 xl:flex-row xl:items-center xl:justify-between">
+              <div class="flex flex-1 flex-wrap items-center gap-2">
                 <el-input
                   v-model="attrQuery.keyword"
-                  class="w-64"
+                  class="w-full xl:w-[280px]"
                   clearable
                   placeholder="搜索属性名称 / 编码"
                   :prefix-icon="Search"
                   @keyup.enter="handleAttrFilter"
                   @clear="handleAttrFilter"
                 />
-                <el-select v-model="attrQuery.dataType" clearable class="w-36" placeholder="数据类型" @change="handleAttrFilter">
+                <el-select v-model="attrQuery.dataType" clearable class="w-full xl:w-[180px]" placeholder="数据类型" @change="handleAttrFilter">
                   <el-option
                     v-for="item in attrDataTypeOptions"
                     :key="item.value"
@@ -246,7 +249,7 @@
                     :value="item.value"
                   />
                 </el-select>
-                <el-select v-model="attrQuery.resourceType" clearable class="w-40" placeholder="资源类型" @change="handleAttrFilter">
+                <el-select v-model="attrQuery.resourceType" clearable class="w-full xl:w-[180px]" placeholder="资源类型" @change="handleAttrFilter">
                   <el-option
                     v-for="item in resourceTypeOptions"
                     :key="item.value"
@@ -254,14 +257,14 @@
                     :value="item.value"
                   />
                 </el-select>
+              </div>
+              <div class="flex justify-end">
                 <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openAttrDialog()">
                   新建属性
                 </el-button>
               </div>
             </div>
-          </template>
 
-          <div class="flex min-h-0 flex-1 flex-col">
             <el-table
               v-loading="attrLoading"
               :data="attrList"
@@ -273,7 +276,7 @@
               <el-table-column prop="name" label="属性名称" min-width="180" show-overflow-tooltip />
               <el-table-column prop="data_type" label="数据类型" width="120" align="center">
                 <template #default="{ row }">
-                  <el-tag size="small" type="info">{{ getAttrDataTypeLabel(row.data_type) }}</el-tag>
+                  <el-tag size="small" type="info" effect="plain">{{ getAttrDataTypeLabel(row.data_type) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="关联单位" width="140">
@@ -286,10 +289,19 @@
                 <template #default="{ row }">
                   <div class="flex flex-wrap gap-1">
                     <el-tag
-                      v-for="type in row.applicable_resource_types"
+                      v-if="isAttrApplicableToAll(row.applicable_resource_types)"
+                      size="small"
+                      type="warning"
+                      effect="light"
+                    >
+                      适用全部
+                    </el-tag>
+                    <el-tag
+                      v-for="type in getDisplayApplicableResourceTypes(row.applicable_resource_types)"
                       :key="type"
                       size="small"
-                      type="success"
+                      :type="getAttrResourceTagType(type)"
+                      effect="light"
                     >
                       {{ getResourceTypeLabel(type) }}
                     </el-tag>
@@ -304,9 +316,8 @@
               </el-table-column>
               <el-table-column label="必填" width="88" align="center">
                 <template #default="{ row }">
-                  <el-tag :type="row.is_required ? 'danger' : 'info'" size="small">
-                    {{ row.is_required ? '是' : '否' }}
-                  </el-tag>
+                  <span v-if="row.is_required" class="text-sm font-semibold text-rose-600">必填</span>
+                  <span v-else class="text-sm text-slate-400">否</span>
                 </template>
               </el-table-column>
               <el-table-column prop="updated_at" label="更新时间" width="168">
@@ -314,14 +325,10 @@
                   {{ formatDate(row.updated_at) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="140" fixed="right">
+              <el-table-column label="操作" width="92" fixed="right" align="center">
                 <template #default="{ row }">
-                  <el-button v-if="canWrite" link type="primary" @click="openAttrDialog(row)">
-                    编辑
-                  </el-button>
-                  <el-button v-if="canDelete" link type="danger" @click="deleteAttr(row)">
-                    删除
-                  </el-button>
+                  <el-button v-if="canWrite" link type="primary" :icon="Edit" @click="openAttrDialog(row)" />
+                  <el-button v-if="canDelete" link type="danger" :icon="Delete" @click="deleteAttr(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -365,7 +372,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, RefreshRight, Search } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
 import DimensionFormDialog from '@/components/master-data/DimensionFormDialog.vue'
 import UnitFormDialog from '@/components/master-data/UnitFormDialog.vue'
 import AttrFormDialog from '@/components/master-data/AttrFormDialog.vue'
@@ -400,6 +407,11 @@ const activeTab = ref<'units' | 'attributes'>('units')
 const canWrite = computed(() => true)
 const canDelete = computed(() => true)
 const dictionaryStore = useDictionaryStore()
+const summaryStats = reactive({
+  dimensions: 0,
+  units: 0,
+  attributes: 0,
+})
 
 const dimensionKeyword = ref('')
 const dimensionLoading = ref(false)
@@ -514,6 +526,25 @@ function getResourceTypeLabel(value: ResourceTypeValue): string {
   return dictionaryStore.getLabel('RESOURCE_TYPE', value)
 }
 
+function isAttrApplicableToAll(values: ResourceTypeValue[]): boolean {
+  const allTypes = resourceTypeOptions.value.map((item) => item.value)
+  return allTypes.length > 0 && allTypes.every((item) => values.includes(item))
+}
+
+function getDisplayApplicableResourceTypes(values: ResourceTypeValue[]): ResourceTypeValue[] {
+  return isAttrApplicableToAll(values) ? [] : values
+}
+
+function getAttrResourceTagType(value: ResourceTypeValue): 'primary' | 'success' | 'warning' | 'info' {
+  if (value === ResourceType.MATERIAL) {
+    return 'primary'
+  }
+  if (value === ResourceType.EQUIPMENT) {
+    return 'success'
+  }
+  return 'info'
+}
+
 function getUnitKindLabel(value: 'BASE' | 'CONVERTED'): string {
   return dictionaryStore.getLabel('UNIT_KIND', value)
 }
@@ -574,6 +605,22 @@ async function loadDimensions(preserveSelection = true) {
     ElMessage.error('加载量纲列表失败')
   } finally {
     dimensionLoading.value = false
+  }
+}
+
+async function loadSummaryStats() {
+  try {
+    const [dimensionResponse, unitResponse, attrResponse] = await Promise.all([
+      unitDimensionApi.list({ page: 1, size: 1 }),
+      unitApi.list({ page: 1, size: 1 }),
+      attrDefinitionApi.list({ page: 1, size: 1 }),
+    ])
+
+    summaryStats.dimensions = dimensionResponse.data.total
+    summaryStats.units = unitResponse.data.total
+    summaryStats.attributes = attrResponse.data.total
+  } catch (error) {
+    console.error('Failed to load dictionary summary stats:', error)
   }
 }
 
@@ -667,7 +714,7 @@ async function deleteDimension(item: UnitDimension) {
     })
     await unitDimensionApi.remove(item.id)
     ElMessage.success('量纲已删除')
-    await loadDimensions(false)
+    await Promise.all([loadDimensions(false), loadSummaryStats()])
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -691,7 +738,7 @@ async function deleteUnit(item: Unit) {
 
     await unitApi.remove(item.id)
     ElMessage.success('单位已删除')
-    await loadUnitsAndConversions()
+    await Promise.all([loadUnitsAndConversions(), loadSummaryStats()])
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -706,7 +753,7 @@ async function deleteAttr(item: AttrDefinition) {
     })
     await attrDefinitionApi.remove(item.id)
     ElMessage.success('柔性属性已删除')
-    await loadAttributes()
+    await Promise.all([loadAttributes(), loadSummaryStats()])
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -715,21 +762,22 @@ async function deleteAttr(item: AttrDefinition) {
 }
 
 async function handleDimensionSaved() {
-  await loadDimensions()
+  await Promise.all([loadDimensions(), loadSummaryStats()])
 }
 
 async function handleUnitSaved() {
-  await loadUnitsAndConversions()
+  await Promise.all([loadUnitsAndConversions(), loadSummaryStats()])
 }
 
 async function handleAttrSaved() {
-  await loadAttributes()
+  await Promise.all([loadAttributes(), loadSummaryStats()])
 }
 
 onMounted(() => {
   void dictionaryStore.ensureLoaded()
   void loadDimensions(false)
   void loadAttributes()
+  void loadSummaryStats()
 })
 </script>
 
@@ -741,37 +789,129 @@ onMounted(() => {
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgb(100 116 139);
 }
 
 .stat-value {
-  margin-top: 0.35rem;
-  font-size: 1.5rem;
+  margin-top: 0.1rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: rgb(15 23 42);
 }
 
-.dimension-card {
-  border: 1px solid rgb(226 232 240);
-  border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
-  padding: 1rem;
-  transition: all 0.18s ease;
+.header-stats :deep(.el-divider--vertical) {
+  height: 28px;
+  margin: 0 0.15rem;
 }
 
-.dimension-card:hover {
-  transform: translateY(-1px);
-  border-color: rgb(125 211 252);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+.header-stat-item {
+  display: flex;
+  min-width: 72px;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
-.dimension-card--active {
-  border-color: rgb(14 165 233);
-  background: linear-gradient(180deg, rgba(240, 249, 255, 1), rgba(224, 242, 254, 0.78));
-  box-shadow: 0 16px 30px rgba(14, 165, 233, 0.12);
+.dimension-create-button {
+  border-style: dashed;
+  border-color: rgb(148 163 184);
+  color: rgb(15 23 42);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.dimension-create-button:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.dimension-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dimension-menu__item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: 0.9rem;
+  background: transparent;
+  padding: 0.8rem 0.85rem 0.8rem 0.7rem;
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dimension-menu__item:hover {
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgb(226 232 240);
+}
+
+.dimension-menu__item--active {
+  border-color: rgba(59, 130, 246, 0.12);
+  border-left-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
+}
+
+.dimension-menu__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.dimension-menu__item:hover .dimension-menu__actions {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.dimension-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(100 116 139);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.dimension-menu__icon:hover {
+  background: rgba(226, 232, 240, 0.9);
+}
+
+.dimension-menu__icon--edit:hover {
+  color: var(--el-color-primary);
+}
+
+.dimension-menu__icon--delete:hover {
+  color: var(--el-color-danger);
+}
+
+.unit-formula-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border-radius: 0.65rem;
+  background: rgb(241 245 249);
+  padding: 0.4rem 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  color: rgb(30 41 59);
 }
 
 .page-header {

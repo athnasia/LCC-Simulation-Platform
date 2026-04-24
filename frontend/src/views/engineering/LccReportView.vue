@@ -208,7 +208,6 @@ import { modelSnapshotApi } from '@/api/engineering'
 import {
   getSimulationStatus,
   type EnergyContextRule,
-  type SimulationResult,
   type SimulationStatusResponse,
   type SimulationTimelineEvent,
 } from '@/api/simulation'
@@ -690,7 +689,7 @@ function renderWaterfallChart() {
           show: true,
           position: 'top',
           color: chartTextColor,
-          formatter: ({ value }: { value: number }) => formatCurrency(value),
+          formatter: (params: any) => formatCurrency(Number(params?.value ?? 0)),
         },
         itemStyle: {
           borderRadius: [10, 10, 0, 0],
@@ -791,8 +790,8 @@ function buildMarkAreas() {
         },
       },
       { xAxis: rule.end_time.slice(0, 5) },
-    ]
-  })
+    ] as const
+  }) as any
 }
 
 function renderTimelineChart() {
@@ -935,7 +934,7 @@ function renderChemicalDonutChart() {
           text: 'LCC NPV',
           fill: chartMutedTextColor,
           font: '500 14px sans-serif',
-          textAlign: 'center',
+          align: 'center',
         },
       },
       {
@@ -946,7 +945,7 @@ function renderChemicalDonutChart() {
           text: formatCompactNumber(dynamicTotalCost.value),
           fill: '#f8fbff',
           font: '700 26px sans-serif',
-          textAlign: 'center',
+          align: 'center',
         },
       },
     ],
@@ -984,7 +983,7 @@ function renderChemicalCashflowChart() {
       backgroundColor: 'rgba(7, 15, 33, 0.96)',
       borderColor: 'rgba(255,255,255,0.08)',
       textStyle: { color: chartTextColor },
-      formatter: (params: any[]) => {
+      formatter: (params: any) => {
         const lines = [params[0]?.axisValueLabel || '']
         let total = 0
         for (const item of params) {

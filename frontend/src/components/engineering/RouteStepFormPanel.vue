@@ -202,7 +202,6 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { OfficeBuilding, Van } from '@element-plus/icons-vue'
-import type { FormInstance } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
 import type { RouteStepBindWithProcess } from '@/api/engineering'
 import { materialApi, processApi, type Material } from '@/api/masterData'
@@ -225,7 +224,6 @@ const store = useEngineeringStore()
 const selectedStep = computed(() => store.selectedStep)
 const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
 
-const formRef = ref<FormInstance>()
 const loading = ref(false)
 const saving = ref(false)
 const materialDetailCache = new Map<number, Material>()

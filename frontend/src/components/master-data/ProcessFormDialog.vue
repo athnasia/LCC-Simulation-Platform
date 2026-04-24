@@ -50,7 +50,6 @@
               :props="{ label: 'name', children: 'children' }"
               check-strictly
               filterable
-              clearable
               placeholder="请选择工序分类"
               class="w-full"
             />
@@ -271,7 +270,7 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 import { attrDefinitionApi, processApi, materialApi, equipmentApi, laborApi, ResourceType } from '@/api/masterData'
-import type { AttrDefinition, Process, ResourceCategory, Material, Equipment, Labor, ProcessResource } from '@/api/masterData'
+import type { AttrDefinition, Process, ResourceCategoryTree, Material, Equipment, Labor, ProcessResourceType } from '@/api/masterData'
 import { ATTR_DATA_TYPE_OPTIONS } from '@/constants/systemDictionaries'
 import { useDictionaryStore } from '@/stores/dictionaries'
 import { resolveDictionaryInputHint } from '@/utils/dictionaryDisplay'
@@ -293,7 +292,7 @@ type LocalProcessResource = {
 const props = defineProps<{
   modelValue: boolean
   data?: Process | null
-  categoryTree: ResourceCategory[]
+  categoryTree: ResourceCategoryTree[]
 }>()
 
 const emit = defineEmits<{
@@ -346,6 +345,9 @@ const rules: FormRules = {
   ],
   name: [
     { required: true, message: '请输入工序名称', trigger: 'blur' }
+  ],
+  category_id: [
+    { required: true, message: '请选择工艺分类', trigger: 'change' }
   ]
 }
 
@@ -385,14 +387,14 @@ function getAttrValuePlaceholder(code: string): string {
   if (!code) return '输入属性值'
   const def = attrDefMap.value.get(code)
   if (!def) return '输入属性值'
-  return resolveDictionaryInputHint(def, attrDataTypeOptions.value)
+  return resolveDictionaryInputHint(attrDataTypeOptions.value, def.data_type, '输入属性值')
 }
 
 function onAttrKeyChange() {
   updateDynamicAttributes()
 }
 
-function validateAttrKey(rule: any, value: any, callback: any) {
+function validateAttrKey(rule: any, _value: any, callback: any) {
   const index = parseInt(rule.field.split('_')[2])
   const currentAttr = dynamicAttrs.value[index]
   if (!currentAttr.key) {
@@ -532,6 +534,12 @@ async function handleSubmit() {
 
   await formRef.value.validate(async (valid) => {
     if (!valid) return
+
+    const categoryId = form.category_id
+    if (categoryId === null) {
+      ElMessage.warning('请选择工艺分类')
+      return
+    }
     
     loading.value = true
     try {
@@ -541,7 +549,7 @@ async function handleSubmit() {
         // Edit flow: Update base properties first
         const payload = {
           name: form.name,
-          category_id: form.category_id,
+          category_id: categoryId,
           setup_time: form.setup_time,
           standard_time: form.standard_time,
           dynamic_attributes: Object.keys(form.dynamic_attributes).length > 0 ? form.dynamic_attributes : null,
@@ -584,7 +592,7 @@ async function handleSubmit() {
           if (toAdd.length > 0) {
             await Promise.all(
               toAdd.map(curr => processApi.addResource(processId, {
-                resource_type: curr.resource_type as ResourceType,
+                resource_type: curr.resource_type as ProcessResourceType,
                 resource_id: curr.resource_id!,
                 quantity: curr.quantity,
                 description: curr.description
@@ -604,7 +612,7 @@ async function handleSubmit() {
         const payload = {
           name: form.name,
           code: form.code,
-          category_id: form.category_id,
+          category_id: categoryId,
           setup_time: form.setup_time,
           standard_time: form.standard_time,
           dynamic_attributes: Object.keys(form.dynamic_attributes).length > 0 ? form.dynamic_attributes : null,

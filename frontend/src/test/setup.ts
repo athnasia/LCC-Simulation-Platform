@@ -3,7 +3,7 @@
  */
 
 import { config } from '@vue/test-utils'
-import { vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
 // Mock Element Plus
 vi.mock('element-plus', () => ({

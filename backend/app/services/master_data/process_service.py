@@ -155,6 +155,12 @@ class ProcessService:
     def create(self, payload: ProcessCreate, operator: str) -> ProcessResponse:
         self._assert_code_unique(payload.code)
 
+        if payload.category_id is None:
+            raise BusinessRuleViolationError(
+                error_code="PROCESS_CATEGORY_REQUIRED",
+                message="工艺分类不能为空",
+            )
+
         process = MdProcess(
             **payload.model_dump(exclude={"resources"}),
             created_by=operator,
@@ -201,6 +207,11 @@ class ProcessService:
         process = self._get_or_404(process_id)
 
         update_data = payload.model_dump(exclude_unset=True)
+        if "category_id" in update_data and update_data["category_id"] is None:
+            raise BusinessRuleViolationError(
+                error_code="PROCESS_CATEGORY_REQUIRED",
+                message="工艺分类不能为空",
+            )
         for field, value in update_data.items():
             setattr(process, field, value)
         process.updated_by = operator

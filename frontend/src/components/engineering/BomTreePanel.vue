@@ -26,7 +26,7 @@
         :default-expand-all="true"
         @node-click="handleNodeClick"
       >
-        <template #default="{ node, data }">
+        <template #default="{ data }">
           <div class="tree-node">
             <div class="node-content">
               <!-- 状态小圆点 -->
@@ -105,16 +105,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ElTree } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
 import type { BomNode, BomNodeTree } from '@/api/engineering'
 import BomNodeDialog from './BomNodeDialog.vue'
 
 const store = useEngineeringStore()
-
-// 树形组件引用
-const treeRef = ref<InstanceType<typeof ElTree>>()
 
 // 树形配置
 const treeProps = {
@@ -126,7 +122,6 @@ const treeProps = {
 const bomTree = computed(() => store.bomTree)
 const hasCurrentSchemeVersion = computed(() => store.hasCurrentSchemeVersion)
 const isCurrentVersionEditable = computed(() => store.isCurrentVersionEditable)
-const selectedBomNode = computed(() => store.selectedBomNode)
 
 // 弹窗相关
 const dialogVisible = ref(false)

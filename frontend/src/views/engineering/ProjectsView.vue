@@ -11,67 +11,20 @@
     <div class="page-content">
       <!-- 左侧：项目/产品/方案树 -->
       <div class="tree-panel">
-        <div class="panel-header">
-          <span>项目结构</span>
-        </div>
         <div class="panel-body">
-          <el-tree
-            ref="treeRef"
-            :data="treeData"
-            :props="treeProps"
-            node-key="id"
-            :default-expand-all="true"
-            :highlight-current="true"
+          <EngineeringStructureTree
+            :nodes="treeData"
+            :loading="loading"
+            :current-node-key="selectedNode?.key ?? null"
+            title="项目结构"
+            empty-description="暂无项目，请点击右上角新建"
+            show-manage-actions
             @node-click="handleNodeClick"
-          >
-            <template #default="{ node, data }">
-              <div class="tree-node">
-                <span class="node-label">
-                  <el-icon v-if="data.type === 'project'" class="node-icon project"><Folder /></el-icon>
-                  <el-icon v-else-if="data.type === 'product'" class="node-icon product"><Box /></el-icon>
-                  <el-icon v-else-if="data.type === 'scheme'" class="node-icon scheme"><Document /></el-icon>
-                  <span>{{ node.label }}</span>
-                </span>
-                <span class="node-actions">
-                  <el-button
-                    v-if="data.type === 'project'"
-                    link
-                    size="small"
-                    @click.stop="handleCreateProduct(data)"
-                  >
-                    <el-icon><Plus /></el-icon>
-                    产品
-                  </el-button>
-                  <el-button
-                    v-if="data.type === 'product'"
-                    link
-                    size="small"
-                    @click.stop="handleCreateScheme(data)"
-                  >
-                    <el-icon><Plus /></el-icon>
-                    方案
-                  </el-button>
-                  <el-button
-                    link
-                    size="small"
-                    @click.stop="handleEdit(data)"
-                  >
-                    <el-icon><Edit /></el-icon>
-                  </el-button>
-                  <el-button
-                    link
-                    size="small"
-                    type="danger"
-                    @click.stop="handleDelete(data)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </span>
-              </div>
-            </template>
-          </el-tree>
-          
-          <el-empty v-if="treeData.length === 0" description="暂无项目，请点击右上角新建" />
+            @create-product="handleCreateProduct"
+            @create-scheme="handleCreateScheme"
+            @edit="handleEdit"
+            @delete="handleDelete"
+          />
         </div>
       </div>
       
@@ -115,7 +68,7 @@
               <el-descriptions :column="2" border>
                 <el-descriptions-item label="产品名称">{{ selectedNode.data.name }}</el-descriptions-item>
                 <el-descriptions-item label="产品编码">{{ selectedNode.data.code }}</el-descriptions-item>
-                <el-descriptions-item label="所属项目">{{ selectedNode.data.project_name || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="所属项目">{{ getSelectedProductProjectName() }}</el-descriptions-item>
                 <el-descriptions-item label="状态">
                   <el-tag :type="selectedNode.data.is_active ? 'success' : 'info'">
                     {{ selectedNode.data.is_active ? '启用' : '停用' }}
@@ -140,7 +93,7 @@
               <el-descriptions :column="2" border style="margin-bottom: 16px;">
                 <el-descriptions-item label="方案名称">{{ selectedNode.data.name }}</el-descriptions-item>
                 <el-descriptions-item label="方案编码">{{ selectedNode.data.code }}</el-descriptions-item>
-                <el-descriptions-item label="所属产品">{{ selectedNode.data.product_name || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="所属产品">{{ getSelectedSchemeProductName() }}</el-descriptions-item>
                 <el-descriptions-item label="状态">
                   <el-tag :type="selectedNode.data.is_active ? 'success' : 'info'">
                     {{ selectedNode.data.is_active ? '启用' : '停用' }}
@@ -275,35 +228,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, ElTree } from 'element-plus'
-import { Plus, Edit, Delete, Folder, Box, Document } from '@element-plus/icons-vue'
-import { projectApi, productApi, designSchemeApi, designSchemeVersionApi, modelSnapshotApi } from '@/api/engineering'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import {
+  designSchemeApi,
+  designSchemeVersionApi,
+  modelSnapshotApi,
+  productApi,
+  projectApi,
+  type DesignSchemeVersion,
+  type ModelSnapshot,
+} from '@/api/engineering'
 import ProjectDialog from '@/components/engineering/ProjectDialog.vue'
 import ProductDialog from '@/components/engineering/ProductDialog.vue'
 import SchemeDialog from '@/components/engineering/SchemeDialog.vue'
 import VersionDialog from '@/components/engineering/VersionDialog.vue'
+import EngineeringStructureTree from '@/components/engineering/EngineeringStructureTree.vue'
+import { buildEngineeringStructureTree, type EngineeringTreeNode } from '@/utils/engineeringStructureTree'
 
 const router = useRouter()
 
-interface TreeNode {
-  id: number
-  label: string
-  type: 'project' | 'product' | 'scheme'
-  data: any
-  children?: TreeNode[]
-}
-
-const treeRef = ref<InstanceType<typeof ElTree>>()
-const treeData = ref<TreeNode[]>([])
-const treeProps = {
-  children: 'children',
-  label: 'label',
-}
-
-const selectedNode = ref<TreeNode | null>(null)
-const versions = ref<any[]>([])
+const treeData = ref<EngineeringTreeNode[]>([])
+const selectedNode = ref<EngineeringTreeNode | null>(null)
+const versions = ref<DesignSchemeVersion[]>([])
 const versionsLoading = ref(false)
 
 const projectDialogVisible = ref(false)
@@ -312,7 +261,7 @@ const schemeDialogVisible = ref(false)
 const versionDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 
-const snapshots = ref<any[]>([])
+const snapshots = ref<ModelSnapshot[]>([])
 const snapshotsLoading = ref(false)
 const currentVersionId = ref<number | null>(null)
 
@@ -335,59 +284,11 @@ async function loadTreeData() {
       designSchemeApi.list({ size: 100 }),
     ])
     
-    const projects = projectsRes.data.items || []
-    const products = productsRes.data.items || []
-    const schemes = schemesRes.data.items || []
-    
-    const productMap = new Map(products.map((p: any) => [p.id, p]))
-    const schemeMap = new Map(schemes.map((s: any) => [s.id, s]))
-    
-    const projectMap = new Map<number, TreeNode>()
-    treeData.value = projects.map((project: any) => {
-      const node: TreeNode = {
-        id: project.id,
-        label: project.name,
-        type: 'project',
-        data: project,
-        children: [],
-      }
-      projectMap.set(project.id, node)
-      return node
-    })
-    
-    products.forEach((product: any) => {
-      const projectNode = projectMap.get(product.project_id)
-      if (projectNode) {
-        if (!projectNode.children) projectNode.children = []
-        projectNode.children.push({
-          id: product.id,
-          label: product.name,
-          type: 'product',
-          data: { ...product, project_name: projectMap.get(product.project_id)?.data.name },
-          children: [],
-        })
-      }
-    })
-    
-    const productNodeMap = new Map<number, TreeNode>()
-    treeData.value.forEach((projectNode) => {
-      projectNode.children?.forEach((productNode) => {
-        productNodeMap.set(productNode.id, productNode)
-      })
-    })
-    
-    schemes.forEach((scheme: any) => {
-      const productNode = productNodeMap.get(scheme.product_id)
-      if (productNode) {
-        if (!productNode.children) productNode.children = []
-        productNode.children.push({
-          id: scheme.id,
-          label: scheme.name,
-          type: 'scheme',
-          data: { ...scheme, product_name: productNode.data.name },
-        })
-      }
-    })
+    treeData.value = buildEngineeringStructureTree(
+      projectsRes.data.items || [],
+      productsRes.data.items || [],
+      schemesRes.data.items || [],
+    )
   } catch (error) {
     console.error('Failed to load tree data:', error)
     ElMessage.error('加载数据失败')
@@ -409,7 +310,7 @@ async function loadVersions(schemeId: number) {
   }
 }
 
-function handleNodeClick(data: TreeNode) {
+function handleNodeClick(data: EngineeringTreeNode) {
   selectedNode.value = data
   if (data.type === 'scheme') {
     loadVersions(data.id)
@@ -421,24 +322,24 @@ function handleCreateProject() {
   projectDialogVisible.value = true
 }
 
-function handleCreateProduct(node: TreeNode) {
+function handleCreateProduct(node: EngineeringTreeNode) {
   currentProjectId.value = node.id
   editingProduct.value = null
   productDialogVisible.value = true
 }
 
-function handleCreateScheme(node: TreeNode) {
+function handleCreateScheme(node: EngineeringTreeNode) {
   currentProductId.value = node.id
   editingScheme.value = null
   schemeDialogVisible.value = true
 }
 
-function handleCreateVersion(node: TreeNode) {
+function handleCreateVersion(node: EngineeringTreeNode) {
   currentSchemeId.value = node.id
   versionDialogVisible.value = true
 }
 
-function handleEdit(node: TreeNode) {
+function handleEdit(node: EngineeringTreeNode) {
   if (node.type === 'project') {
     editingProject.value = node.data
     projectDialogVisible.value = true
@@ -451,7 +352,7 @@ function handleEdit(node: TreeNode) {
   }
 }
 
-async function handleDelete(node: TreeNode) {
+async function handleDelete(node: EngineeringTreeNode) {
   const typeNames = { project: '项目', product: '产品', scheme: '方案' }
   
   try {
@@ -460,11 +361,11 @@ async function handleDelete(node: TreeNode) {
     })
     
     if (node.type === 'project') {
-      await projectApi.delete(node.id)
+      await projectApi.remove(node.id)
     } else if (node.type === 'product') {
-      await productApi.delete(node.id)
+      await productApi.remove(node.id)
     } else if (node.type === 'scheme') {
-      await designSchemeApi.delete(node.id)
+      await designSchemeApi.remove(node.id)
     }
     
     ElMessage.success('删除成功')
@@ -501,7 +402,7 @@ async function handleDeleteVersion(version: any) {
       type: 'warning',
     })
     
-    await designSchemeVersionApi.delete(version.id)
+    await designSchemeVersionApi.remove(version.id)
     ElMessage.success('删除成功')
     loadVersions(selectedNode.value!.id)
   } catch (error) {
@@ -523,7 +424,7 @@ function handleOpenWorkbench(schemeId: number, versionId: number, status: string
   })
 }
 
-async function handleOpenSnapshots(schemeId: number, versionId: number) {
+async function handleOpenSnapshots(_schemeId: number, versionId: number) {
   currentVersionId.value = versionId
   snapshotsLoading.value = true
   snapshotDialogVisible.value = true
@@ -576,6 +477,22 @@ function getVersionStatusText(status: string) {
     ARCHIVED: '已归档',
   }
   return map[status] || status
+}
+
+function getSelectedProductProjectName() {
+  if (selectedNode.value?.type !== 'product') {
+    return '-'
+  }
+  const data = selectedNode.value.data as { project_name?: string }
+  return data.project_name || '-'
+}
+
+function getSelectedSchemeProductName() {
+  if (selectedNode.value?.type !== 'scheme') {
+    return '-'
+  }
+  const data = selectedNode.value.data as { product_name?: string }
+  return data.product_name || '-'
 }
 
 onMounted(() => {
@@ -635,54 +552,9 @@ onMounted(() => {
   min-width: 500px;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
-  font-weight: 600;
-  color: #303133;
-}
-
 .panel-body {
   flex: 1;
   overflow: auto;
   padding: 16px;
-}
-
-.tree-node {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding-right: 8px;
-}
-
-.node-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.node-icon {
-  font-size: 16px;
-}
-
-.node-icon.project {
-  color: #409eff;
-}
-
-.node-icon.product {
-  color: #67c23a;
-}
-
-.node-icon.scheme {
-  color: #e6a23c;
-}
-
-.node-actions {
-  display: flex;
-  gap: 4px;
 }
 </style>

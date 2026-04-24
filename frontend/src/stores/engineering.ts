@@ -325,16 +325,21 @@ export const useEngineeringStore = defineStore('engineering', () => {
       return
     }
 
+    const currentVersion = currentSchemeVersion.value
+    if (!currentVersion) {
+      return
+    }
+
     try {
       const res = await bomNodeApi.create({
         ...data,
-        scheme_version_id: currentSchemeVersion.value.id,
+        scheme_version_id: currentVersion.id,
       } as BomNode)
       
       ElMessage.success('创建节点成功')
       
       // 重新加载 BOM 树
-      await loadBomTree(currentSchemeVersion.value.id)
+      await loadBomTree(currentVersion.id)
       
       return res.data
     } catch (error) {

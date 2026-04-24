@@ -466,6 +466,7 @@ export interface Labor {
   hourly_rate: number | null
   qualification_code: string | null
   category_id: number | null
+  dynamic_attributes: Record<string, unknown> | null
   is_active: boolean
   description: string | null
   category: Pick<ResourceCategory, 'id' | 'name' | 'code'> | null
@@ -490,6 +491,7 @@ export interface LaborCreate {
   hourly_rate?: number | null
   qualification_code?: string | null
   category_id?: number | null
+  dynamic_attributes?: Record<string, unknown> | null
   is_active?: boolean
   description?: string | null
 }
@@ -517,7 +519,7 @@ export const laborApi = {
 // 六、工序 Process
 // ═══════════════════════════════════════════════════════════════
 
-export type ProcessResourceType = ResourceType
+export type ProcessResourceType = 'MATERIAL' | 'EQUIPMENT' | 'LABOR' | 'TOOL'
 
 export interface ProcessResource {
   id: number
@@ -525,7 +527,6 @@ export interface ProcessResource {
   resource_type: ProcessResourceType
   resource_id: number
   quantity: number
-  resource_name: string | null
   description: string | null
   created_at: string
   updated_at: string
@@ -543,7 +544,7 @@ export interface Process {
   dynamic_attributes: Record<string, unknown> | null
   is_active: boolean
   description: string | null
-  category: Pick<ResourceCategory, 'id' | 'name' | 'code' | 'parent_id'> | null
+  category: Pick<ResourceCategory, 'id' | 'name' | 'code'> | null
   resources: ProcessResource[]
   created_at: string
   updated_at: string
@@ -559,7 +560,7 @@ export interface ProcessQuery extends PageQuery {
 export interface ProcessCreate {
   name: string
   code: string
-  category_id?: number | null
+  category_id: number
   standard_time?: number | null
   setup_time?: number | null
   dynamic_attributes?: Record<string, unknown> | null
@@ -573,7 +574,7 @@ export interface ProcessCreate {
   }[]
 }
 
-export type ProcessUpdate = Partial<Omit<ProcessCreate, 'code' | 'resources'>>
+export type ProcessUpdate = Partial<Omit<ProcessCreate, 'resources'>>
 
 export const processApi = {
   list: (params: ProcessQuery): Promise<AxiosResponse<PageResult<Process>>> =>
@@ -594,7 +595,7 @@ export const processApi = {
   clone: (id: number, data: { new_name: string; new_code: string; copy_resources?: boolean }): Promise<AxiosResponse<Process>> =>
     request.post(`/master-data/processes/${id}/clone`, data),
 
-  addResource: (processId: number, data: Omit<ProcessResource, 'id' | 'process_id' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by' | 'resource_name'>): Promise<AxiosResponse<ProcessResource>> =>
+  addResource: (processId: number, data: { resource_type: ProcessResourceType; resource_id: number; quantity?: number; description?: string | null }): Promise<AxiosResponse<ProcessResource>> =>
     request.post(`/master-data/processes/${processId}/resources`, data),
 
   removeResource: (processId: number, resourceId: number): Promise<AxiosResponse<void>> =>
@@ -695,4 +696,3 @@ export const energyApi = {
   removeCalendar: (id: number): Promise<AxiosResponse<void>> =>
     request.delete(`/master-data/energy/calendars/${id}`),
 }
-

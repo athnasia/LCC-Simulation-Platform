@@ -108,6 +108,7 @@ export type FormRuleTrigger = 'blur' | 'change'
 
 export interface FormRule {
   required?: boolean
+  type?: 'string' | 'number' | 'boolean' | 'method' | 'regexp' | 'integer' | 'float' | 'array' | 'object' | 'enum' | 'date' | 'url' | 'hex' | 'email'
   message?: string
   trigger?: FormRuleTrigger | FormRuleTrigger[]
   pattern?: RegExp

@@ -285,7 +285,7 @@ async function handleSubmit() {
       const payload = {
         name: form.name,
         energy_type: form.energy_type,
-        unit_price: form.unit_price,
+        unit_price: form.unit_price ?? undefined,
         is_active: form.is_active,
       }
       await energyApi.updateRate(props.data.id, payload)

@@ -135,7 +135,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { useEngineeringStore } from '@/stores/engineering'
@@ -143,7 +143,6 @@ import BomTreePanel from '@/components/engineering/BomTreePanel.vue'
 import ProcessRoutePanel from '@/components/engineering/ProcessRoutePanel.vue'
 import RouteStepFormPanel from '@/components/engineering/RouteStepFormPanel.vue'
 
-const router = useRouter()
 const route = useRoute()
 const store = useEngineeringStore()
 

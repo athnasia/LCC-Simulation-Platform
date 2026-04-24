@@ -215,11 +215,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useEngineeringStore } from '@/stores/engineering'
-import type { RouteStepBindWithProcess, ComponentProcessRoute } from '@/api/engineering'
+import type { RouteStepBindWithProcess } from '@/api/engineering'
 import ProcessSelectorDialog from './ProcessSelectorDialog.vue'
 
 const store = useEngineeringStore()

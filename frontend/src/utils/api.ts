@@ -6,7 +6,7 @@
 
 import request from './request'
 import type { AxiosResponse } from 'axios'
-import type { PageResult, PageQuery, ApiResponse, ApiError } from '@/types/common'
+import type { PageResult, PageQuery, ApiError } from '@/types/common'
 
 /**
  * 创建分页查询参数

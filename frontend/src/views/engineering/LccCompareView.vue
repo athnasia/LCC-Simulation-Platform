@@ -5,7 +5,7 @@
         <div class="header-left">
           <el-button class="back-button" text @click="handleBack">
             <el-icon><ArrowLeft /></el-icon>
-            <span>返回全景快照中心</span>
+            <span>返回{{ backTargetLabel }}</span>
           </el-button>
           <div class="title-block">
             <div class="eyebrow">PROCESS_CHEMICAL / LCC A-B TEST</div>
@@ -195,7 +195,7 @@
 
     <div v-else class="state-shell">
       <el-empty :description="errorMessage || '未找到可用于LCC 对标的双快照数据'" />
-      <el-button type="primary" @click="handleBack">返回全景快照中心</el-button>
+      <el-button type="primary" @click="handleBack">返回{{ backTargetLabel }}</el-button>
     </div>
   </div>
 </template>
@@ -307,6 +307,7 @@ const costDeltaRate = computed(() => {
   const base = expensiveSnapshot.value?.totalCost ?? 0
   return base > 0 ? costDelta.value / base : 0
 })
+const backTargetLabel = computed(() => (route.query.source === 'decision-center' ? '仿真结果优选与决策' : '产品快照中心'))
 const recommendationTag = computed(() => (cheaperSnapshot.value ? `建议采用方案 ${cheaperSnapshot.value.slot}` : '待判断'))
 const recommendationText = computed(() => {
   if (!cheaperSnapshot.value || !expensiveSnapshot.value) return '待加载双方案数据'
@@ -661,7 +662,8 @@ async function handlePromote() {
 }
 
 function handleBack() {
-  router.push('/costing/snapshot-center')
+  const source = route.query.source === 'decision-center' ? '/costing/decision-center' : '/costing/snapshot-center'
+  router.push(source)
 }
 
 watch(() => [route.query.sid1, route.query.sid2], () => {
