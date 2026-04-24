@@ -163,14 +163,10 @@ class ResourceCategoryService:
         self._assert_code_unique(payload.code)
 
         if payload.parent_id is not None:
-            parent = self.db.execute(
-                select(MdResourceCategory).where(
-                    MdResourceCategory.id == payload.parent_id,
-                    MdResourceCategory.is_deleted == False,
-                )
-            ).scalar_one_or_none()
-            if parent is None:
-                raise ResourceNotFoundError(resource="父分类", identifier=payload.parent_id)
+            raise BusinessRuleViolationError(
+                error_code="RESOURCE_CATEGORY_FLAT_ONLY",
+                message="资源分类仅支持一级结构，请直接挂到材料/设备/人员/工艺类型下",
+            )
 
         category = MdResourceCategory(
             **payload.model_dump(),
@@ -190,19 +186,10 @@ class ResourceCategoryService:
             self._assert_code_unique(payload.code, exclude_id=category_id)
 
         if payload.parent_id is not None:
-            if payload.parent_id == category_id:
-                raise BusinessRuleViolationError(
-                    error_code="RESOURCE_CATEGORY_PARENT_SELF",
-                    message="父分类不能是自己",
-                )
-            parent = self.db.execute(
-                select(MdResourceCategory).where(
-                    MdResourceCategory.id == payload.parent_id,
-                    MdResourceCategory.is_deleted == False,
-                )
-            ).scalar_one_or_none()
-            if parent is None:
-                raise ResourceNotFoundError(resource="父分类", identifier=payload.parent_id)
+            raise BusinessRuleViolationError(
+                error_code="RESOURCE_CATEGORY_FLAT_ONLY",
+                message="资源分类仅支持一级结构，请直接挂到材料/设备/人员/工艺类型下",
+            )
 
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
