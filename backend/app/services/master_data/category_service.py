@@ -182,9 +182,6 @@ class ResourceCategoryService:
     ) -> ResourceCategoryResponse:
         category = self._get_or_404(category_id)
 
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=category_id)
-
         if payload.parent_id is not None:
             raise BusinessRuleViolationError(
                 error_code="RESOURCE_CATEGORY_FLAT_ONLY",

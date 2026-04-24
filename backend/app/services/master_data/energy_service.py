@@ -132,9 +132,6 @@ class EnergyRateService:
     ) -> EnergyRateResponse:
         rate = self._get_or_404(rate_id)
 
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=rate_id)
-
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(rate, field, value)

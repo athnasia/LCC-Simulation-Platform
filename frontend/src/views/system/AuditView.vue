@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="flex flex-col gap-3">
     <!-- 过滤器 -->
     <el-card shadow="never" body-style="padding:12px 16px">
@@ -94,6 +94,7 @@ import type { AuditLog, AuditAction } from '@/api/system'
 import { AUDIT_ACTION_OPTIONS, AUDIT_RESOURCE_TYPE_OPTIONS } from '@/constants/systemDictionaries'
 import { useDictionaryStore } from '@/stores/dictionaries'
 import { resolveDictionaryLabel, resolveDictionaryTagType } from '@/utils/dictionaryDisplay'
+import { formatDate } from '@/utils/format'
 
 const logList = ref<AuditLog[]>([])
 const loading = ref(false)
@@ -141,10 +142,6 @@ function handleReset() {
   dateRange.value = null
   pagination.page = 1
   loadLogs()
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 
 const actionTagType = (action: AuditAction) => {

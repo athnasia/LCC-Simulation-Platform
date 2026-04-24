@@ -170,6 +170,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import { resourceCategoryApi, processApi, ResourceType } from '@/api/masterData'
 import type { ResourceCategoryTree, Process, ProcessQuery } from '@/api/masterData'
 import ProcessFormDialog from '@/components/master-data/ProcessFormDialog.vue'
+import { formatDate } from '@/utils/format'
 
 type ProcessTreeNodeType = 'root' | 'category' | 'process'
 
@@ -269,18 +270,6 @@ const processTree = computed<ProcessTreeNode[]>(() => {
     },
   ]
 })
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
 
 async function loadCategoryTree() {
   try {

@@ -181,6 +181,7 @@ import { equipmentApi, resourceCategoryApi, ResourceType } from '@/api/masterDat
 import type { Equipment, EquipmentQuery, ResourceCategoryTree } from '@/api/masterData'
 import EquipmentFormDialog from '@/components/master-data/EquipmentFormDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatDate } from '@/utils/format'
 
 interface EquipmentQueryState {
   keyword: string
@@ -269,10 +270,6 @@ async function deleteEquipment(row: Equipment) {
     }
     ElMessage.error('删除失败，请稍后重试')
   }
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 
 function getDisplayAttrs(attrs: Record<string, unknown>): Record<string, unknown> {

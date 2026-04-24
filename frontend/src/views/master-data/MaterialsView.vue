@@ -181,6 +181,7 @@ import { materialApi, resourceCategoryApi, ResourceType } from '@/api/masterData
 import type { Material, MaterialQuery, ResourceCategoryTree } from '@/api/masterData'
 import MaterialFormDialog from '@/components/master-data/MaterialFormDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatDate, formatPrice } from '@/utils/format'
 
 interface MaterialQueryState {
   keyword: string
@@ -269,15 +270,6 @@ async function deleteMaterial(row: Material) {
     }
     ElMessage.error('删除失败，请稍后重试')
   }
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
-}
-
-function formatPrice(value: number | string | null) {
-  if (value === null || value === undefined) return '-'
-  return `¥${Number(value).toFixed(4)}`
 }
 
 function getDisplayAttrs(attrs: Record<string, unknown>): Record<string, unknown> {

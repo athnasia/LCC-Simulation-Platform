@@ -53,7 +53,6 @@ def create_lcc_financial_baseline(
         detail=payload.model_dump(mode="json"),
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()
     return result
 
 
@@ -84,7 +83,6 @@ def update_lcc_financial_baseline(
         detail=payload.model_dump(exclude_unset=True, mode="json"),
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()
     return result
 
 
@@ -104,4 +102,3 @@ def delete_lcc_financial_baseline(
         resource_id=baseline_id,
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()

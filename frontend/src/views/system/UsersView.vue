@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="flex gap-4 h-full">
     <!-- ── 左：部门树 ─────────────────────────────── -->
     <el-card v-if="canReadDepartments" class="w-56 flex-shrink-0" shadow="never" body-style="padding:12px">
@@ -155,6 +155,7 @@ import DeptFormDialog from '@/components/system/DeptFormDialog.vue'
 import UserFormDialog from '@/components/system/UserFormDialog.vue'
 import UserResetPwdDialog from '@/components/system/UserResetPwdDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatDate } from '@/utils/format'
 
 type DepartmentTreeNode = Department & { children: DepartmentTreeNode[] }
 
@@ -272,10 +273,6 @@ async function loadRoleOptions() {
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
-}
-
 function buildDepartmentTree(items: Department[]): DepartmentTreeNode[] {
   const nodeMap = new Map<number, DepartmentTreeNode>()
   const roots: DepartmentTreeNode[] = []

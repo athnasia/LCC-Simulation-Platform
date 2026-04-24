@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AttrFormDialog: typeof import('./src/components/master-data/AttrFormDialog.vue')['default']
+    AttributeTablePanel: typeof import('./src/components/master-data/dictionaries/AttributeTablePanel.vue')['default']
     BaseDialog: typeof import('./src/components/base/BaseDialog.vue')['default']
     BaseTable: typeof import('./src/components/base/BaseTable.vue')['default']
     BomNodeDialog: typeof import('./src/components/engineering/BomNodeDialog.vue')['default']
@@ -20,6 +21,7 @@ declare module 'vue' {
     DictItemFormDialog: typeof import('./src/components/system/DictItemFormDialog.vue')['default']
     DictTypeFormDialog: typeof import('./src/components/system/DictTypeFormDialog.vue')['default']
     DimensionFormDialog: typeof import('./src/components/master-data/DimensionFormDialog.vue')['default']
+    DimensionSidebar: typeof import('./src/components/master-data/dictionaries/DimensionSidebar.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
@@ -79,6 +81,7 @@ declare module 'vue' {
     LaborFormDialog: typeof import('./src/components/master-data/LaborFormDialog.vue')['default']
     MaterialFormDialog: typeof import('./src/components/master-data/MaterialFormDialog.vue')['default']
     PageContainer: typeof import('./src/components/base/PageContainer.vue')['default']
+    PageHeader: typeof import('./src/components/master-data/dictionaries/PageHeader.vue')['default']
     PermissionFormDialog: typeof import('./src/components/system/PermissionFormDialog.vue')['default']
     ProcessFormDialog: typeof import('./src/components/master-data/ProcessFormDialog.vue')['default']
     ProcessRoutePanel: typeof import('./src/components/engineering/ProcessRoutePanel.vue')['default']
@@ -92,6 +95,7 @@ declare module 'vue' {
     SchemeDialog: typeof import('./src/components/engineering/SchemeDialog.vue')['default']
     SnapshotInventoryPanel: typeof import('./src/components/engineering/SnapshotInventoryPanel.vue')['default']
     UnitFormDialog: typeof import('./src/components/master-data/UnitFormDialog.vue')['default']
+    UnitTablePanel: typeof import('./src/components/master-data/dictionaries/UnitTablePanel.vue')['default']
     UserFormDialog: typeof import('./src/components/system/UserFormDialog.vue')['default']
     UserResetPwdDialog: typeof import('./src/components/system/UserResetPwdDialog.vue')['default']
     VersionDialog: typeof import('./src/components/engineering/VersionDialog.vue')['default']

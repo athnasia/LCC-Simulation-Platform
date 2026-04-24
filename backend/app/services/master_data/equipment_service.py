@@ -128,9 +128,6 @@ class EquipmentService:
     ) -> EquipmentResponse:
         equipment = self._get_or_404(equipment_id)
 
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=equipment_id)
-
         if payload.category_id is not None:
             self._validate_category_type(payload.category_id)
 

@@ -106,9 +106,6 @@ class AttrDefinitionService:
     ) -> AttrDefinitionResponse:
         attr = self._get_or_404(attr_id)
 
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=attr_id)
-
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(attr, field, value)
@@ -255,9 +252,6 @@ class MaterialService:
         self, material_id: int, payload: MaterialUpdate, operator: str
     ) -> MaterialResponse:
         material = self._get_or_404(material_id)
-
-        if payload.code is not None:
-            self._assert_code_unique(payload.code, exclude_id=material_id)
 
         if payload.category_id is not None:
             self._validate_category_type(payload.category_id)

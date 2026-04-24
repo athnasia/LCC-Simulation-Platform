@@ -305,7 +305,6 @@ def create_resource_category(
 ) -> ResourceCategoryResponse:
     operator = str(current_user.id)
     result = ResourceCategoryService(db).create(payload, operator)
-    db.commit()
     AuditLogService(db).write(
         user_id=current_user.id,
         username=current_user.username,
@@ -315,7 +314,6 @@ def create_resource_category(
         detail=payload.model_dump(mode="json"),
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()
     return result
 
 
@@ -346,7 +344,6 @@ def update_resource_category(
 ) -> ResourceCategoryResponse:
     operator = str(current_user.id)
     result = ResourceCategoryService(db).update(category_id, payload, operator)
-    db.commit()
     AuditLogService(db).write(
         user_id=current_user.id,
         username=current_user.username,
@@ -356,7 +353,6 @@ def update_resource_category(
         detail=payload.model_dump(exclude_unset=True, mode="json"),
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()
     return result
 
 
@@ -372,7 +368,6 @@ def delete_resource_category(
     current_user: SysUser = Depends(require_permission("/system/dictionaries", "delete")),
 ) -> None:
     ResourceCategoryService(db).delete(category_id, str(current_user.id))
-    db.commit()
     AuditLogService(db).write(
         user_id=current_user.id,
         username=current_user.username,
@@ -381,4 +376,3 @@ def delete_resource_category(
         resource_id=category_id,
         ip_address=request.client.host if request.client else None,
     )
-    db.commit()

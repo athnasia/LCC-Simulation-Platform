@@ -15,7 +15,7 @@
   1. 严格遵循 RESTful API 设计风格
   2. 使用 Pydantic Schemas 进行进出参校验
   3. 统一使用 Depends(get_db) 注入数据库 Session
-  4. 增删改操作必须在末尾调用 db.commit()
+  4. 事务提交由 get_db 依赖自动处理，无需手动 commit
   5. 异常处理必须转化为合适的 HTTP 状态码
 """
 
@@ -112,7 +112,6 @@ def create_project(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return project
 
 
@@ -147,7 +146,6 @@ def update_project(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return project
 
 
@@ -171,7 +169,6 @@ def delete_project(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -218,7 +215,6 @@ def create_product(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return product
 
 
@@ -253,7 +249,6 @@ def update_product(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return product
 
 
@@ -277,7 +272,6 @@ def delete_product(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -324,7 +318,6 @@ def create_scheme(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return scheme
 
 
@@ -359,7 +352,6 @@ def update_scheme(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return scheme
 
 
@@ -383,7 +375,6 @@ def delete_scheme(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -430,7 +421,6 @@ def create_scheme_version(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return version
 
 
@@ -465,7 +455,6 @@ def update_scheme_version(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return version
 
 
@@ -489,7 +478,6 @@ def delete_scheme_version(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 @router.post("/scheme-versions/{version_id}/release", response_model=DesignSchemeVersionResponse)
@@ -512,7 +500,6 @@ def release_scheme_version(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return version
 
 
@@ -572,7 +559,6 @@ def create_bom_node(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return node
 
 
@@ -607,7 +593,6 @@ def update_bom_node(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return node
 
 
@@ -631,7 +616,6 @@ def delete_bom_node(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -676,7 +660,6 @@ def create_process_route(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return route
 
 
@@ -711,7 +694,6 @@ def update_process_route(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return route
 
 
@@ -735,7 +717,6 @@ def delete_process_route(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -788,7 +769,6 @@ def create_route_step(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return step
 
 
@@ -823,7 +803,6 @@ def update_route_step(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return step
 
 
@@ -847,7 +826,6 @@ def delete_route_step(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
 
 
 @router.post("/route-steps/reorder", status_code=status.HTTP_204_NO_CONTENT)
@@ -871,7 +849,6 @@ def reorder_route_steps(
         ip_address=request.client.host if request else None,
     )
     
-    db.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -916,7 +893,6 @@ def create_snapshot(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return snapshot
 
 
@@ -944,7 +920,6 @@ def generate_snapshot(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return snapshot
 
 
@@ -979,7 +954,6 @@ def update_snapshot(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
     return snapshot
 
 
@@ -1003,4 +977,3 @@ def delete_snapshot(
         ip_address=request.client.host if request.client else None,
     )
     
-    db.commit()
