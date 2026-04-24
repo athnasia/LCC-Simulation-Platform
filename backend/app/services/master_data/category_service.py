@@ -5,7 +5,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import BusinessRuleViolationError, ResourceNotFoundError
-from app.models.master_data import MdResourceCategory, ResourceType
+from app.models.master_data import (
+    MdEquipment,
+    MdLabor,
+    MdMaterial,
+    MdProcess,
+    MdResourceCategory,
+    ResourceType,
+)
 from app.schemas.common import PageResult
 from app.schemas.master_data import (
     ResourceCategoryCreate,
@@ -206,6 +213,54 @@ class ResourceCategoryService:
 
     def delete(self, category_id: int, operator: str) -> None:
         category = self._get_or_404(category_id)
+
+        child_count = self.db.execute(
+            select(func.count()).select_from(MdResourceCategory).where(
+                MdResourceCategory.parent_id == category_id,
+                MdResourceCategory.is_deleted == False,
+            )
+        ).scalar_one()
+        if child_count > 0:
+            raise BusinessRuleViolationError(
+                error_code="RESOURCE_CATEGORY_HAS_CHILDREN",
+                message=f"分类「{category.name}」下仍有子分类，不能删除",
+            )
+
+        binding_count = 0
+        if category.resource_type == ResourceType.MATERIAL:
+            binding_count = self.db.execute(
+                select(func.count()).select_from(MdMaterial).where(
+                    MdMaterial.category_id == category_id,
+                    MdMaterial.is_deleted == False,
+                )
+            ).scalar_one()
+        elif category.resource_type == ResourceType.EQUIPMENT:
+            binding_count = self.db.execute(
+                select(func.count()).select_from(MdEquipment).where(
+                    MdEquipment.category_id == category_id,
+                    MdEquipment.is_deleted == False,
+                )
+            ).scalar_one()
+        elif category.resource_type == ResourceType.LABOR:
+            binding_count = self.db.execute(
+                select(func.count()).select_from(MdLabor).where(
+                    MdLabor.category_id == category_id,
+                    MdLabor.is_deleted == False,
+                )
+            ).scalar_one()
+        elif category.resource_type == ResourceType.PROCESS:
+            binding_count = self.db.execute(
+                select(func.count()).select_from(MdProcess).where(
+                    MdProcess.category_id == category_id,
+                    MdProcess.is_deleted == False,
+                )
+            ).scalar_one()
+
+        if binding_count > 0:
+            raise BusinessRuleViolationError(
+                error_code="RESOURCE_CATEGORY_IN_USE",
+                message=f"分类「{category.name}」下仍有关联数据，不能删除",
+            )
 
         category.code = _build_deleted_unique_value(category.code, category.id, 30)
         category.is_deleted = True

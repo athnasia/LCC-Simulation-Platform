@@ -11,8 +11,14 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, get_db, require_permission
+from app.models.master_data import ResourceType
 from app.models.system import SysUser
 from app.schemas.common import PageResult
+from app.schemas.master_data import (
+    ResourceCategoryCreate,
+    ResourceCategoryResponse,
+    ResourceCategoryUpdate,
+)
 from app.schemas.system_dictionary import (
     SysDictCacheResponse,
     SysDictItemCreate,
@@ -22,6 +28,7 @@ from app.schemas.system_dictionary import (
     SysDictTypeResponse,
     SysDictTypeUpdate,
 )
+from app.services.master_data.category_service import ResourceCategoryService
 from app.services.system_dictionary_service import (
     SystemDictionaryCacheService,
     SystemDictionaryItemService,
@@ -257,3 +264,121 @@ def get_dict_cache(
     _: SysUser = Depends(get_current_active_user),
 ) -> SysDictCacheResponse:
     return SystemDictionaryCacheService(db).get_active_cache()
+
+
+@router.get(
+    "/resource-categories",
+    response_model=PageResult[ResourceCategoryResponse],
+    summary="查询资源分类列表",
+)
+def list_resource_categories(
+    keyword: str | None = Query(None, description="分类名称或编码关键字"),
+    resource_type: ResourceType | None = Query(None, description="资源类型"),
+    parent_id: int | None = Query(None, description="父分类 ID"),
+    is_active: bool | None = Query(None, description="是否启用"),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=1000, description="每页数量"),
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/system/dictionaries", "read")),
+) -> PageResult[ResourceCategoryResponse]:
+    return ResourceCategoryService(db).list(
+        keyword=keyword,
+        resource_type=resource_type,
+        parent_id=parent_id,
+        is_active=is_active,
+        page=page,
+        size=size,
+    )
+
+
+@router.post(
+    "/resource-categories",
+    response_model=ResourceCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="创建资源分类",
+)
+def create_resource_category(
+    payload: ResourceCategoryCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/system/dictionaries", "write")),
+) -> ResourceCategoryResponse:
+    operator = str(current_user.id)
+    result = ResourceCategoryService(db).create(payload, operator)
+    db.commit()
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        resource_type="MdResourceCategory",
+        resource_id=result.id,
+        detail=payload.model_dump(mode="json"),
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
+
+
+@router.get(
+    "/resource-categories/{category_id}",
+    response_model=ResourceCategoryResponse,
+    summary="获取资源分类详情",
+)
+def get_resource_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    _: SysUser = Depends(require_permission("/system/dictionaries", "read")),
+) -> ResourceCategoryResponse:
+    return ResourceCategoryService(db).get(category_id)
+
+
+@router.put(
+    "/resource-categories/{category_id}",
+    response_model=ResourceCategoryResponse,
+    summary="更新资源分类",
+)
+def update_resource_category(
+    category_id: int,
+    payload: ResourceCategoryUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/system/dictionaries", "write")),
+) -> ResourceCategoryResponse:
+    operator = str(current_user.id)
+    result = ResourceCategoryService(db).update(category_id, payload, operator)
+    db.commit()
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="MdResourceCategory",
+        resource_id=category_id,
+        detail=payload.model_dump(exclude_unset=True, mode="json"),
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return result
+
+
+@router.delete(
+    "/resource-categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除资源分类",
+)
+def delete_resource_category(
+    category_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(require_permission("/system/dictionaries", "delete")),
+) -> None:
+    ResourceCategoryService(db).delete(category_id, str(current_user.id))
+    db.commit()
+    AuditLogService(db).write(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        resource_type="MdResourceCategory",
+        resource_id=category_id,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()

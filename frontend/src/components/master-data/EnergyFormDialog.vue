@@ -66,6 +66,11 @@
 
       <el-divider content-position="left">时段配置 (峰/平/谷等)</el-divider>
 
+      <div class="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+        <span>这里维护同一能源费率下的峰、平、谷等时段系数；编辑已有能源时会同步覆盖子表配置。</span>
+        <el-button type="primary" link :icon="Plus" @click="addCalendar">添加时段</el-button>
+      </div>
+
       <el-table :data="form.calendars" border size="small" class="w-full mb-4">
         <el-table-column label="时段名称" width="130">
           <template #default="{ $index }">
@@ -123,8 +128,6 @@
           </template>
         </el-table-column>
       </el-table>
-
-      <el-button type="dashed" class="w-full" :icon="Plus" @click="addCalendar">添加日历时段</el-button>
 
     </el-form>
 
@@ -272,24 +275,21 @@ async function handleSubmit() {
   loading.value = true
   try {
     if (isEdit.value && props.data?.id) {
-      // 这里的逻辑需要根据后端实现：如果后端的 EnergyRateUpdate 不接收嵌套的 calendars 处理，
-      // 则由于前端需要更新子表，通常意味着我们要依次通过 /master-data/energy/calendars 的单独接口增删改。
-      // 但是最稳妥的是在 edit 时先更新基础数据（如果不改子表），
-      // 出于防腐起见，目前约定如果支持全量子表更新（通常通过新建或定制 update 接口）。
-      // 鉴于 EnergyRateUpdate 不包含 calendars, 我们可以提醒用户无法直接在此同步编辑所有的 child。
-      // 为了能够走通前后端，这里依然走分发逻辑，或是提示暂不在此保存日历。
-      // 注意：后端的 api 定义中明确：`EnergyRateUpdate = Partial<Omit<EnergyRateCreate, 'calendars'>>`
-      // 这证实编辑能源日历本身需要调用单独的 listCalendars/createCalendar/updateCalendar/removeCalendar。
-      ElMessage.info('编辑操作正在更新主表项，子项时段若有删改需联系后端开启级联或调用独立的日历 API')
-      
       const payload = {
         name: form.name,
         energy_type: form.energy_type,
         unit_price: form.unit_price ?? undefined,
         is_active: form.is_active,
+        calendars: form.calendars.map(c => ({
+          name: c.name,
+          start_time: c.start_time as string,
+          end_time: c.end_time as string,
+          multiplier: c.multiplier as number,
+          is_active: true,
+        })),
       }
       await energyApi.updateRate(props.data.id, payload)
-      ElMessage.success('基础数据更新成功')
+      ElMessage.success('能源费率与时段配置更新成功')
     } else {
       // 新建可以嵌套
       const payload = {

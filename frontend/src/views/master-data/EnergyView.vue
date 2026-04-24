@@ -198,8 +198,9 @@ function openCreateDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(row: EnergyRate) {
-  currentEnergy.value = structuredClone(row)
+async function openEditDialog(row: EnergyRate) {
+  const detail = await energyApi.detailRate(row.id)
+  currentEnergy.value = detail.data
   dialogVisible.value = true
 }
 

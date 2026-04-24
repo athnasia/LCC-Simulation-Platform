@@ -169,7 +169,13 @@
             <el-table-column label="选择材料" min-width="200">
               <template #default="{ row }">
                 <el-select v-model="row.resource_id" filterable placeholder="选择材料" class="w-full">
-                  <el-option v-for="item in materialOptions" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  <el-option-group
+                    v-for="group in groupedMaterialOptions"
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option v-for="item in group.items" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  </el-option-group>
                 </el-select>
               </template>
             </el-table-column>
@@ -200,7 +206,13 @@
             <el-table-column label="选择设备" min-width="200">
               <template #default="{ row }">
                 <el-select v-model="row.resource_id" filterable placeholder="选择设备" class="w-full">
-                  <el-option v-for="item in equipmentOptions" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  <el-option-group
+                    v-for="group in groupedEquipmentOptions"
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option v-for="item in group.items" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  </el-option-group>
                 </el-select>
               </template>
             </el-table-column>
@@ -231,7 +243,13 @@
             <el-table-column label="选择人员矩阵" min-width="200">
               <template #default="{ row }">
                 <el-select v-model="row.resource_id" filterable placeholder="选择人员" class="w-full">
-                  <el-option v-for="item in laborOptions" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  <el-option-group
+                    v-for="group in groupedLaborOptions"
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option v-for="item in group.items" :key="item.id" :label="`${item.name} (${item.code})`" :value="item.id" />
+                  </el-option-group>
                 </el-select>
               </template>
             </el-table-column>
@@ -289,6 +307,11 @@ type LocalProcessResource = {
   description: string | null
 }
 
+type ResourceOptionGroup<T extends Material | Equipment | Labor> = {
+  label: string
+  items: T[]
+}
+
 const props = defineProps<{
   modelValue: boolean
   data?: Process | null
@@ -322,6 +345,10 @@ const materialOptions = ref<Material[]>([])
 const equipmentOptions = ref<Equipment[]>([])
 const laborOptions = ref<Labor[]>([])
 
+const groupedMaterialOptions = computed(() => buildResourceGroups(materialOptions.value))
+const groupedEquipmentOptions = computed(() => buildResourceGroups(equipmentOptions.value))
+const groupedLaborOptions = computed(() => buildResourceGroups(laborOptions.value))
+
 // Mounted Resources
 const mountedMaterials = ref<LocalProcessResource[]>([])
 const mountedEquipments = ref<LocalProcessResource[]>([])
@@ -349,6 +376,30 @@ const rules: FormRules = {
   category_id: [
     { required: true, message: '请选择工艺分类', trigger: 'change' }
   ]
+}
+
+function buildResourceGroups<T extends Material | Equipment | Labor>(items: T[]): ResourceOptionGroup<T>[] {
+  const groupMap = new Map<string, T[]>()
+
+  items
+    .slice()
+    .sort((left, right) => {
+      const leftCategory = left.category?.name ?? '未分类'
+      const rightCategory = right.category?.name ?? '未分类'
+      return `${leftCategory}-${left.name}`.localeCompare(`${rightCategory}-${right.name}`, 'zh-CN')
+    })
+    .forEach((item) => {
+      const label = item.category?.name ?? '未分类'
+      if (!groupMap.has(label)) {
+        groupMap.set(label, [])
+      }
+      groupMap.get(label)?.push(item)
+    })
+
+  return Array.from(groupMap.entries()).map(([label, groupedItems]) => ({
+    label,
+    items: groupedItems,
+  }))
 }
 
 async function loadLookupOptions() {

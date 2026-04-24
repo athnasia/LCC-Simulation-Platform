@@ -1,6 +1,16 @@
 import request from '@/utils/request'
 import type { AxiosResponse } from 'axios'
 
+export const ResourceType = {
+  MATERIAL: 'MATERIAL',
+  EQUIPMENT: 'EQUIPMENT',
+  LABOR: 'LABOR',
+  TOOL: 'TOOL',
+  PROCESS: 'PROCESS',
+} as const
+
+export type ResourceType = (typeof ResourceType)[keyof typeof ResourceType]
+
 export interface PageResult<T> {
   items: T[]
   total: number
@@ -104,6 +114,42 @@ export interface DictionaryCacheResponse {
   dictionaries: DictionaryCacheType[]
 }
 
+export interface ResourceCategory {
+  id: number
+  name: string
+  code: string
+  resource_type: ResourceType
+  parent_id: number | null
+  sort_order: number
+  is_active: boolean
+  description: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+  updated_by: string | null
+}
+
+export interface ResourceCategoryQuery {
+  keyword?: string
+  resource_type?: ResourceType
+  parent_id?: number
+  is_active?: boolean
+  page?: number
+  size?: number
+}
+
+export interface ResourceCategoryCreate {
+  name: string
+  code: string
+  resource_type: ResourceType
+  parent_id?: number | null
+  sort_order?: number
+  is_active?: boolean
+  description?: string | null
+}
+
+export type ResourceCategoryUpdate = Partial<ResourceCategoryCreate>
+
 export const systemDictionaryApi = {
   listTypes: (params: DictionaryTypeQuery): Promise<AxiosResponse<PageResult<DictionaryType>>> =>
     request.get('/system/dictionaries/types', { params }),
@@ -134,6 +180,21 @@ export const systemDictionaryApi = {
 
   removeItem: (id: number): Promise<AxiosResponse<void>> =>
     request.delete(`/system/dictionaries/items/${id}`),
+
+  listResourceCategories: (params: ResourceCategoryQuery): Promise<AxiosResponse<PageResult<ResourceCategory>>> =>
+    request.get('/system/dictionaries/resource-categories', { params }),
+
+  createResourceCategory: (data: ResourceCategoryCreate): Promise<AxiosResponse<ResourceCategory>> =>
+    request.post('/system/dictionaries/resource-categories', data),
+
+  detailResourceCategory: (id: number): Promise<AxiosResponse<ResourceCategory>> =>
+    request.get(`/system/dictionaries/resource-categories/${id}`),
+
+  updateResourceCategory: (id: number, data: ResourceCategoryUpdate): Promise<AxiosResponse<ResourceCategory>> =>
+    request.put(`/system/dictionaries/resource-categories/${id}`, data),
+
+  removeResourceCategory: (id: number): Promise<AxiosResponse<void>> =>
+    request.delete(`/system/dictionaries/resource-categories/${id}`),
 
   getCache: (): Promise<AxiosResponse<DictionaryCacheResponse>> =>
     request.get('/system/dictionaries/cache'),

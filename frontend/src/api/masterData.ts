@@ -663,7 +663,7 @@ export interface EnergyRateCreate {
   }[]
 }
 
-export type EnergyRateUpdate = Partial<Omit<EnergyRateCreate, 'calendars'>>
+export type EnergyRateUpdate = Partial<EnergyRateCreate>
 
 export const energyApi = {
   listRates: (params: EnergyRateQuery): Promise<AxiosResponse<PageResult<EnergyRate>>> =>
