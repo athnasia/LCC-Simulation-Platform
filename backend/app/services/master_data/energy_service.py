@@ -132,18 +132,15 @@ class EnergyRateService:
     ) -> EnergyRateResponse:
         rate = self._get_or_404(rate_id)
 
-        update_data = payload.model_dump(exclude_unset=True)
+        update_data = payload.model_dump(exclude_unset=True, exclude={"calendars"})
         for field, value in update_data.items():
             setattr(rate, field, value)
         rate.updated_by = operator
         self.db.flush()
 
-        # 同步日历：由于日历数据较多且存在时间段重叠校验等复杂逻辑，此处采用“全量覆盖”策略（物理删除旧的，插入新的）
-        # 注意：此处 MdEnergyCalendar 没有 AuditMixin，所以物理删除是可以接受的，或者也可以改为逻辑删除。
-        # 但在报告中没有明确要求能源日历的逻辑删除，由于日历是能源速率的从属配置，通常随速率生命周期。
-        self.db.query(MdEnergyCalendar).filter(MdEnergyCalendar.energy_rate_id == rate_id).delete()
-        
-        if payload.calendars:
+        if payload.calendars is not None:
+            self.db.query(MdEnergyCalendar).filter(MdEnergyCalendar.energy_rate_id == rate_id).delete()
+            
             for calendar_data in payload.calendars:
                 calendar = MdEnergyCalendar(
                     energy_rate_id=rate_id,
@@ -152,8 +149,8 @@ class EnergyRateService:
                     updated_by=operator,
                 )
                 self.db.add(calendar)
-        
-        self.db.flush()
+            
+            self.db.flush()
 
         rate = self.db.execute(
             select(MdEnergyRate)

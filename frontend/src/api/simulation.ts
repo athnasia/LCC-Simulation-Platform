@@ -103,6 +103,7 @@ export interface SimulationResult {
     energy_cost?: string
     outsource_cost?: string
   }
+  chemical_energy_analysis?: any
   energy_context?: EnergyContext
   error_message?: string
   stack_trace?: string

@@ -8,51 +8,181 @@
             <span>返回全景快照中心</span>
           </el-button>
           <div class="title-block">
-            <div class="snapshot-code">{{ snapshotCodeDisplay }}</div>
-            <h1>{{ snapshotNameDisplay }}</h1>
+            <h1>
+              {{ snapshotNameDisplay }}
+              <span class="snapshot-code">报告编号：{{ snapshotCodeDisplay }}</span>
+            </h1>
             <div v-if="isChemicalSimulation" class="title-subline">
-              化工 LCC 财务驾驶舱 / 生命周期折现推演
+              项目名称：{{ snapshotNameDisplay }} | LCC 全生命周期成本折现推演报告
             </div>
-            <div v-else class="title-subline">
-              离散工序推演 / 虚拟时间轴成本对标
-            </div>
+            <div v-else class="title-subline">工序推演 / 虚拟时间轴成本对标</div>
           </div>
         </div>
-        <div class="header-right">
-          <el-tag class="status-tag" :type="statusTagType" effect="dark">
-            {{ reportStatusText }}
-          </el-tag>
+        <div
+          class="header-right"
+          style="
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+            z-index: 10;
+          "
+        >
+          <el-collapse class="data-specs-collapse" style="width: 320px">
+            <el-collapse-item name="1">
+              <template #title>
+                <div class="collapse-title">📑 数据口径说明</div>
+              </template>
+              <ul class="specs-list">
+                <li>折现率：8%</li>
+                <li>计算周期：15 年</li>
+                <li>LCOE 计算逻辑：全生命周期总成本 ÷ 总发电量</li>
+                <li>风险成本：按当年 OPEX 的 0.75% 计提</li>
+                <li>能耗数据：基于满负荷运行工况理论推演</li>
+              </ul>
+            </el-collapse-item>
+          </el-collapse>
         </div>
       </div>
 
       <template v-if="isChemicalSimulation">
-        <el-row :gutter="18" class="hero-metrics chemical-metrics">
-          <el-col v-for="card in financialCards" :key="card.key" :xs="24" :sm="12" :lg="Math.floor(24 / 5)">
+        <div class="conclusion-panel">
+          <div class="conclusion-title">仿真核心结论</div>
+          <div class="conclusion-text">
+            本项目全生命周期度电成本 (LCOE) 为
+            <span class="highlight">{{
+              chemicalEnergyAnalysis?.weighted_price || "--"
+            }}</span>
+            元/度，总成本净现值
+            <span class="highlight">{{ formatCurrency(dynamicTotalCost) }}</span
+            >。运营成本占比超过 50%，建议重点优化能源效率与原材料采购成本。
+          </div>
+        </div>
+
+        <el-row :gutter="24" class="hero-metrics chemical-metrics">
+          <el-col
+            v-for="card in financialCards"
+            :key="card.key"
+            :xs="24"
+            :sm="12"
+            class="col-lg-5"
+          >
             <div class="metric-card chemical-card" :class="card.cardClass">
-              <div class="metric-label">{{ card.label }}</div>
-              <div class="metric-value emphasis">{{ card.value }}</div>
-              <div class="metric-subtitle">{{ card.subtitle }}</div>
+              <div class="metric-label">
+                {{ card.label }}
+                <el-tooltip
+                  v-if="card.key === 'EOL' && card.rawValue < 0"
+                  content="处置成本大于残值回收，为净支出项"
+                  placement="top"
+                >
+                  <el-icon class="warn-icon"><Warning /></el-icon>
+                </el-tooltip>
+              </div>
+              <div class="metric-value">{{ card.value }}</div>
+              <div class="metric-subtitle">= {{ card.subtitle }}</div>
             </div>
           </el-col>
         </el-row>
 
-        <el-row :gutter="18" class="charts-grid chemical-grid">
+        <el-row :gutter="24" class="energy-metrics" v-if="chemicalEnergyAnalysis">
+          <el-col :xs="24" :md="6">
+            <div class="metric-card energy-card energy-lcoe">
+              <div class="metric-label">
+                综合度电价格 (LCOE)
+                <el-tooltip
+                  :content="`基于 ${chemicalEnergyAnalysis.rate_code} 加权折算 (x ${chemicalEnergyAnalysis.weighted_multiplier})`"
+                  placement="top"
+                >
+                  <el-icon class="info-icon"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+              <div class="metric-value">
+                {{ chemicalEnergyAnalysis.weighted_price }}
+                <span class="unit-text">元/度</span>
+              </div>
+            </div>
+          </el-col>
+          <el-col :xs="24" :md="6">
+            <div class="metric-card energy-card">
+              <div class="metric-label">工序单组推演能耗</div>
+              <div class="metric-value">
+                {{ Number(chemicalEnergyAnalysis.energy_kwh_per_run).toFixed(2) }}
+                <span class="unit-text">kWh</span>
+              </div>
+              <div class="metric-subtitle">= 全线受控物理设备理论单次功耗合计</div>
+            </div>
+          </el-col>
+          <el-col :xs="24" :md="6">
+            <div class="metric-card energy-card">
+              <div class="metric-label">年化总电网采购预算</div>
+              <div class="metric-value">
+                {{ chemicalEnergyAnalysis.annual_energy_cost }}
+              </div>
+              <div class="metric-subtitle">= 年满负荷折算电费（已融入LCC OPEX）</div>
+            </div>
+          </el-col>
+          <el-col :xs="24" :md="6">
+            <div class="metric-card energy-card">
+              <div class="metric-label">常态非能源运营支出</div>
+              <div class="metric-value">
+                {{ chemicalEnergyAnalysis.annual_regular_opex }}
+              </div>
+              <div class="metric-subtitle">= 含生产原料与全职人员薪酬</div>
+            </div>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="24" class="charts-grid chemical-grid">
           <el-col :xs="24" :lg="10">
             <div class="chart-card chemical-panel">
-              <div class="chart-header">
-                <h3>五维成本结构环形图</h3>
-                <span>资本投入、运营消耗、维保、风险与处置残值占比</span>
+              <div
+                class="chart-header"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                "
+              >
+                <div>
+                  <h3>五维成本结构环形图</h3>
+                  <span>资本投入、运营消耗、维保、风险与处置残值占比</span>
+                </div>
+                <div style="text-align: right">
+                  <div style="color: #94a3b8; font-size: 14px; margin-bottom: 4px">
+                    全生命周期成本净现值
+                  </div>
+                  <div style="color: #f8fafc; font-size: 28px; font-weight: 700">
+                    ¥
+                    {{
+                      dynamicTotalCost.toLocaleString("zh-CN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    }}
+                  </div>
+                </div>
               </div>
               <div ref="chemicalDonutChartRef" class="chart-canvas"></div>
+              <div class="chart-insight">
+                成本结构分析：运营成本 (OPEX) 占比最高，为项目成本控制核心；初始投资
+                (CAPEX) 占比次之；维保与风险成本合计占比不足 5%，整体成本结构健康。
+              </div>
             </div>
           </el-col>
           <el-col :xs="24" :lg="14">
             <div class="chart-card chemical-panel">
               <div class="chart-header">
-                <h3>生命周期现金流堆叠柱状图</h3>
+                <h3>全生命周期成本现金流折现分布</h3>
                 <span>Year 0 CAPEX 起投，Year 1-N 折现 OPEX / M&amp;R / Risk / EOL</span>
               </div>
-              <div ref="chemicalCashflowChartRef" class="chart-canvas chart-canvas-wide"></div>
+              <div
+                ref="chemicalCashflowChartRef"
+                class="chart-canvas chart-canvas-wide"
+              ></div>
+              <div class="chart-insight">
+                现金流分布：项目成本集中在建设期 (Year
+                0)，运营期成本逐年平稳递减，处置期产生净支出。
+              </div>
             </div>
           </el-col>
         </el-row>
@@ -63,13 +193,49 @@
             <span>逐年现值拆解与累计净现值审计</span>
           </div>
           <el-table :data="chemicalAuditRows" border class="audit-table chemical-table">
-            <el-table-column prop="yearLabel" label="年份" width="110" fixed="left" />
-            <el-table-column prop="pvOpex" label="OPEX 现值" min-width="160" align="right" />
-            <el-table-column prop="pvMaintenance" label="维保现值" min-width="160" align="right" />
-            <el-table-column prop="pvRisk" label="风险现值" min-width="160" align="right" />
-            <el-table-column prop="pvEol" label="EOL 现值" min-width="160" align="right" />
-            <el-table-column prop="yearTotal" label="当年合计现值" min-width="180" align="right" />
-            <el-table-column prop="cumulativeNpv" label="累计 NPV" min-width="180" align="right" fixed="right">
+            <el-table-column
+              prop="yearLabel"
+              label="项目周期（年）"
+              width="130"
+              fixed="left"
+            />
+            <el-table-column
+              prop="pvOpex"
+              label="运营成本现值(OPEX)"
+              min-width="160"
+              align="right"
+            />
+            <el-table-column
+              prop="pvMaintenance"
+              label="维保成本现值(M&R)"
+              min-width="160"
+              align="right"
+            />
+            <el-table-column
+              prop="pvRisk"
+              label="风险拨备现值(Risk Cost)"
+              min-width="160"
+              align="right"
+            />
+            <el-table-column
+              prop="pvEol"
+              label="期末处置现值(EOL)"
+              min-width="160"
+              align="right"
+            />
+            <el-table-column
+              prop="yearTotal"
+              label="年度成本现值合计(Total)"
+              min-width="180"
+              align="right"
+            />
+            <el-table-column
+              prop="cumulativeNpv"
+              label="累计成本净现值(NPV)"
+              min-width="180"
+              align="right"
+              fixed="right"
+            >
               <template #default="{ row }">
                 <span class="total-cell">{{ row.cumulativeNpv }}</span>
               </template>
@@ -90,7 +256,9 @@
           <el-col :xs="24" :sm="12" :lg="6">
             <div class="metric-card metric-dynamic">
               <div class="metric-label">LCC 动态仿真总成本</div>
-              <div class="metric-value emphasis">{{ formatCurrency(dynamicTotalCost) }}</div>
+              <div class="metric-value emphasis">
+                {{ formatCurrency(dynamicTotalCost) }}
+              </div>
               <div class="metric-subtitle">虚拟时间轴推演结果</div>
             </div>
           </el-col>
@@ -108,7 +276,9 @@
           <el-col :xs="24" :sm="12" :lg="6">
             <div class="metric-card metric-cycle">
               <div class="metric-label">高耗能时段命中数 / 仿真虚拟周期</div>
-              <div class="metric-value compact">{{ peakHitCount }} / {{ virtualCycleDisplay }}</div>
+              <div class="metric-value compact">
+                {{ peakHitCount }} / {{ virtualCycleDisplay }}
+              </div>
               <div class="metric-subtitle">峰电命中次数 / 虚拟加工总时长</div>
             </div>
           </el-col>
@@ -150,27 +320,46 @@
             <span>逐工序拆解机器费、人工费、电费与异常时段命中</span>
           </div>
           <el-table :data="timelineRows" stripe border class="audit-table">
-            <el-table-column prop="process_name" label="工序名称" min-width="160" fixed="left" />
+            <el-table-column
+              prop="process_name"
+              label="工序名称"
+              min-width="160"
+              fixed="left"
+            />
             <el-table-column prop="process_type" label="工艺类型" width="120">
               <template #default="{ row }">
-                <el-tag :type="row.process_type === 'OUTSOURCED' ? 'danger' : 'primary'" effect="dark">
-                  {{ row.process_type === 'OUTSOURCED' ? '外协' : '自制' }}
+                <el-tag
+                  :type="row.process_type === 'OUTSOURCED' ? 'danger' : 'primary'"
+                  effect="dark"
+                >
+                  {{ row.process_type === "OUTSOURCED" ? "外协" : "自制" }}
                 </el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="start_time_label" label="开始时间" width="180" />
             <el-table-column prop="end_time_label" label="结束时间" width="180" />
             <el-table-column prop="machine_cost" label="机器费" width="120" align="right">
-              <template #default="{ row }">{{ formatCurrency(row.machine_cost) }}</template>
+              <template #default="{ row }">{{
+                formatCurrency(row.machine_cost)
+              }}</template>
             </el-table-column>
             <el-table-column prop="labor_cost" label="人工费" width="120" align="right">
               <template #default="{ row }">{{ formatCurrency(row.labor_cost) }}</template>
             </el-table-column>
             <el-table-column prop="energy_cost" label="电费" width="120" align="right">
-              <template #default="{ row }">{{ formatCurrency(row.energy_cost) }}</template>
+              <template #default="{ row }">{{
+                formatCurrency(row.energy_cost)
+              }}</template>
             </el-table-column>
-            <el-table-column prop="material_cost" label="材料费" width="120" align="right">
-              <template #default="{ row }">{{ formatCurrency(row.material_cost) }}</template>
+            <el-table-column
+              prop="material_cost"
+              label="材料费"
+              width="120"
+              align="right"
+            >
+              <template #default="{ row }">{{
+                formatCurrency(row.material_cost)
+              }}</template>
             </el-table-column>
             <el-table-column prop="total_cost" label="工序总计" width="140" align="right">
               <template #default="{ row }">
@@ -179,8 +368,12 @@
             </el-table-column>
             <el-table-column label="异常备注" min-width="180" fixed="right">
               <template #default="{ row }">
-                <el-tag v-if="row.hit_peak" type="danger" effect="dark">峰值电价命中</el-tag>
-                <el-tag v-else-if="row.hit_valley" type="success" effect="dark">谷电窗口</el-tag>
+                <el-tag v-if="row.hit_peak" type="danger" effect="dark"
+                  >峰值电价命中</el-tag
+                >
+                <el-tag v-else-if="row.hit_valley" type="success" effect="dark"
+                  >谷电窗口</el-tag
+                >
                 <span v-else class="normal-note">正常时段</span>
               </template>
             </el-table-column>
@@ -200,7 +393,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Bottom, Top } from '@element-plus/icons-vue'
+import { ArrowLeft, Bottom, Top, Warning, InfoFilled } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 
 import { getStaticCostLedger, type StaticCostResult } from '@/api/costing'
@@ -251,6 +444,17 @@ interface ChemicalAuditRow {
   pvEol: string
   yearTotal: string
   cumulativeNpv: string
+}
+
+interface ChemicalEnergyAnalysis {
+  rate_code: string
+  base_price: string
+  weighted_multiplier: string
+  weighted_price: string
+  energy_kwh_per_run: string
+  annual_energy_kwh: string
+  annual_energy_cost: string
+  annual_regular_opex: string
 }
 
 const router = useRouter()
@@ -304,6 +508,8 @@ const financialBreakdown = ref<Record<'CAPEX' | 'OPEX' | 'M&R' | 'RISK_COST' | '
   RISK_COST: 0,
   EOL: 0,
 })
+
+const chemicalEnergyAnalysis = ref<ChemicalEnergyAnalysis | null>(null)
 
 const chartTextColor = '#dbe7ff'
 const chartMutedTextColor = '#7f93b8'
@@ -400,7 +606,7 @@ const financialCards = computed<FinancialBreakdownMetric[]>(() => {
     {
       key: 'M&R',
       label: 'M&R (全周期维保现值)',
-      subtitle: '含腐蚀老化附加',
+      subtitle: '含腐蚀老化附加成本',
       value: formatCurrency(financialBreakdown.value['M&R']),
       rawValue: financialBreakdown.value['M&R'],
       displayValue: Math.abs(financialBreakdown.value['M&R']),
@@ -409,7 +615,7 @@ const financialCards = computed<FinancialBreakdownMetric[]>(() => {
     {
       key: 'RISK_COST',
       label: 'RISK COST (风险拨备现值)',
-      subtitle: '固定值或 OPEX 比例拨备',
+      subtitle: '按OPEX比例计提拨备',
       value: formatCurrency(financialBreakdown.value.RISK_COST),
       rawValue: financialBreakdown.value.RISK_COST,
       displayValue: Math.abs(financialBreakdown.value.RISK_COST),
@@ -418,7 +624,7 @@ const financialCards = computed<FinancialBreakdownMetric[]>(() => {
     {
       key: 'EOL',
       label: 'EOL (期末处置与残值)',
-      subtitle: '残值回收或拆除处置影响',
+      subtitle: '残值回收-拆除处置成本',
       value: formatCurrency(financialBreakdown.value.EOL),
       rawValue: financialBreakdown.value.EOL,
       displayValue: Math.abs(financialBreakdown.value.EOL),
@@ -587,6 +793,8 @@ function applySimulationData(payload: SimulationStatusResponse) {
     RISK_COST: toNumber(simulation.financial_breakdown?.RISK_COST),
     EOL: toNumber(simulation.financial_breakdown?.EOL),
   }
+
+  chemicalEnergyAnalysis.value = simulation.chemical_energy_analysis || null
 }
 
 function applySnapshotDetail(payload: { snapshot_code: string; snapshot_name: string }) {
@@ -925,30 +1133,7 @@ function renderChemicalDonutChart() {
         data: chartData,
       },
     ],
-    graphic: [
-      {
-        type: 'text',
-        left: 'center',
-        top: '34%',
-        style: {
-          text: 'LCC NPV',
-          fill: chartMutedTextColor,
-          font: '500 14px sans-serif',
-          align: 'center',
-        },
-      },
-      {
-        type: 'text',
-        left: 'center',
-        top: '40%',
-        style: {
-          text: formatCompactNumber(dynamicTotalCost.value),
-          fill: '#f8fbff',
-          font: '700 26px sans-serif',
-          align: 'center',
-        },
-      },
-    ],
+
   }
 
   chemicalDonutChart.setOption(option)
@@ -997,19 +1182,25 @@ function renderChemicalCashflowChart() {
     xAxis: {
       type: 'category',
       data: xAxisData,
-      axisLine: { lineStyle: { color: gridLineColor } },
-      axisLabel: { color: chartMutedTextColor, interval: 0 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisLabel: {
+        color: '#94A3B8',
+        interval: (index: number, value: string) => {
+          if (value === 'Year 0' || value === 'Year 5' || value === 'Year 10' || value === 'Year 15') return true
+          return false
+        }
+      },
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisLabel: {
-        color: chartMutedTextColor,
-        formatter: (value: number) => `￥${(value / 10000).toFixed(0)}w`,
+        color: '#94A3B8',
+        formatter: (value: number) => `¥${(value / 10000).toFixed(0)}w`,
       },
       splitLine: { lineStyle: { color: gridLineColor } },
       name: '现值金额',
-      nameTextStyle: { color: chartMutedTextColor, padding: [0, 0, 8, 0] },
+      nameTextStyle: { color: '#94A3B8', padding: [0, 0, 8, 0] },
     },
     series: [
       {
@@ -1090,328 +1281,305 @@ onUnmounted(() => {
 
 <style scoped>
 .lcc-report-view {
-  min-height: 100%;
-  padding: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(55, 97, 255, 0.15), transparent 32%),
-    radial-gradient(circle at top right, rgba(255, 163, 26, 0.12), transparent 28%),
-    linear-gradient(145deg, #07101f 0%, #0d172b 45%, #060b14 100%);
+  min-height: calc(100vh - 64px);
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  padding: 32px;
+  font-family: "Inter", "Noto Sans SC", sans-serif;
+  position: relative;
+}
+
+.lcc-report-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(71, 85, 105, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 85, 105, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
 }
 
 .report-shell {
+  max-width: 1600px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.report-header,
-.metric-card,
-.chart-card,
-.audit-card {
-  border: 1px solid rgba(128, 153, 197, 0.16);
-  background: rgba(8, 17, 33, 0.68);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(18px);
+  gap: 32px;
+  position: relative;
+  z-index: 1;
 }
 
 .report-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-radius: 22px;
+  align-items: flex-start;
 }
 
 .header-left {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .back-button {
-  color: #9ab0da;
-  font-weight: 500;
+  width: fit-content;
+  color: #94a3b8;
 }
 
-.title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.back-button:hover {
+  color: #f8fafc;
 }
 
 .title-block h1 {
-  margin: 0;
-  color: #f5f8ff;
+  margin: 0 0 8px 0;
   font-size: 28px;
-  letter-spacing: 0.03em;
-}
-
-.title-subline {
-  color: #6e89b5;
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .snapshot-code {
-  color: #76d4ff;
-  font-size: 13px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 400;
+  color: #94a3b8;
+  padding: 4px 12px;
+  background: rgba(51, 65, 85, 0.4);
+  border-radius: 4px;
 }
 
-.status-tag {
-  padding: 0 14px;
-  height: 32px;
+.title-subline {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.conclusion-panel {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conclusion-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #10b981;
+}
+
+.conclusion-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #f8fafc;
+}
+
+.conclusion-text .highlight {
+  font-weight: 700;
+  color: #3b82f6;
 }
 
 .hero-metrics {
-  margin-bottom: 0;
-}
-
-.chemical-metrics :deep(.el-col) {
-  min-width: 0;
-}
-
-.metric-card {
-  min-height: 150px;
-  padding: 18px 20px;
-  border-radius: 22px;
-  overflow: hidden;
-  position: relative;
-}
-
-.metric-card::after {
-  content: '';
-  position: absolute;
-  inset: auto -30px -50px auto;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.metric-static {
-  box-shadow: inset 0 0 0 1px rgba(48, 201, 255, 0.1), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.metric-dynamic {
-  box-shadow: inset 0 0 0 1px rgba(255, 185, 60, 0.14), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.metric-alert {
-  box-shadow: inset 0 0 0 1px rgba(255, 82, 111, 0.14), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.metric-good {
-  box-shadow: inset 0 0 0 1px rgba(41, 211, 178, 0.14), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.metric-cycle {
-  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.14), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.chemical-card {
-  min-height: 164px;
-}
-
-.financial-capex {
-  box-shadow: inset 0 0 0 1px rgba(106, 213, 255, 0.16), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.financial-opex {
-  box-shadow: inset 0 0 0 1px rgba(76, 224, 179, 0.16), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.financial-mr {
-  box-shadow: inset 0 0 0 1px rgba(255, 179, 71, 0.16), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.financial-risk {
-  box-shadow: inset 0 0 0 1px rgba(255, 107, 138, 0.16), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.financial-eol {
-  box-shadow: inset 0 0 0 1px rgba(157, 140, 255, 0.16), 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.metric-label {
-  color: #8ea6d3;
-  font-size: 13px;
-  margin-bottom: 14px;
-}
-
-.metric-value {
-  color: #e8f0ff;
-  font-size: 34px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.metric-value.emphasis {
-  color: #ffbd4c;
-  font-size: 34px;
-}
-
-.metric-value.compact {
-  font-size: 28px;
-}
-
-.metric-delta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 24px;
-}
-
-.metric-alert .metric-delta {
-  color: #ff6b6b;
-}
-
-.metric-good .metric-delta {
-  color: #29d3b2;
-}
-
-.delta-icon {
-  font-size: 22px;
-}
-
-.metric-subtitle {
-  margin-top: 14px;
-  color: #647b9f;
-  font-size: 12px;
-}
-
-.charts-grid {
   margin-top: 0;
 }
 
-.chemical-grid {
+.metric-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.financial-capex {
+  border-top: 2px solid #3b82f6;
+}
+.financial-opex {
+  border-top: 2px solid #10b981;
+}
+.financial-mr {
+  border-top: 2px solid #f59e0b;
+}
+.financial-risk {
+  border-top: 2px solid #8b5cf6;
+}
+.financial-eol {
+  border-top: 2px solid #a78bfa;
+}
+
+.metric-label {
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warn-icon {
+  color: #f59e0b;
+  font-size: 16px;
+  cursor: help;
+}
+
+.info-icon {
+  color: #3b82f6;
+  font-size: 16px;
+  cursor: help;
+}
+
+.metric-value {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.metric-subtitle {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.energy-metrics {
+  margin-bottom: 0;
+  display: flex;
   align-items: stretch;
+  flex-wrap: wrap; /* 防止小屏幕下挤压 */
+}
+
+.energy-card {
+  border-top: none;
+  justify-content: center;
+  height: 100%; /* 添加这行 */
+  box-sizing: border-box; /* 添加这行 */
+}
+
+.energy-lcoe {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, #1e293b 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.energy-lcoe .metric-value {
+  font-size: 40px;
+  color: #3b82f6;
+}
+
+.unit-text {
+  font-size: 16px;
+  font-weight: 400;
+  color: #94a3b8;
+  margin-left: 4px;
+}
+
+.mt-24 {
+  margin-top: 24px;
 }
 
 .chart-card,
 .audit-card {
-  border-radius: 24px;
-  padding: 18px;
-  height: 100%;
-}
-
-.chemical-panel {
-  background:
-    linear-gradient(180deg, rgba(10, 24, 43, 0.92), rgba(6, 12, 24, 0.88));
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 24px;
 }
 
 .chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .chart-header h3 {
-  margin: 0;
-  color: #f5f8ff;
-  font-size: 18px;
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #f8fafc;
 }
 
 .chart-header span {
-  color: #6f84a7;
-  font-size: 12px;
-  text-align: right;
+  font-size: 14px;
+  color: #94a3b8;
 }
 
 .chart-canvas {
+  height: 320px;
   width: 100%;
-  height: 360px;
 }
 
 .chart-canvas-wide {
-  height: 380px;
+  height: 320px;
 }
 
-.audit-card {
-  padding-bottom: 20px;
-  overflow: hidden;
+.chart-insight {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
 }
 
-.audit-table :deep(.el-table__header-wrapper th),
-.audit-table :deep(.el-table__body-wrapper td) {
-  background: rgba(8, 17, 33, 0.95);
-  color: #dbe7ff;
-  border-color: rgba(127, 147, 184, 0.14);
+.audit-table {
+  --el-table-border-color: #334155;
+  --el-table-header-bg-color: rgba(15, 23, 42, 0.8);
+  --el-table-header-text-color: #f8fafc;
+  --el-table-tr-bg-color: #1e293b;
+  --el-table-row-hover-bg-color: rgba(51, 65, 85, 0.5);
+  --el-table-text-color: #f8fafc;
+  border-radius: 4px;
 }
 
-.chemical-table :deep(.el-table__header-wrapper th) {
-  background: rgba(12, 28, 48, 0.96);
-}
-
-.audit-table :deep(.el-table__body tr:hover > td) {
-  background: rgba(20, 38, 66, 0.96);
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: rgba(15, 23, 42, 0.3);
 }
 
 .total-cell {
-  color: #ffcd73;
+  color: #3b82f6;
   font-weight: 700;
 }
 
-.normal-note {
-  color: #8197bb;
+.data-specs-collapse {
+  --el-collapse-border-color: #334155;
+  --el-collapse-header-bg-color: #1e293b;
+  --el-collapse-header-text-color: #f8fafc;
+  --el-collapse-content-bg-color: #1e293b;
+  --el-collapse-content-text-color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.collapse-title {
+  font-size: 16px;
+  font-weight: 600;
+  padding-left: 16px;
+}
+
+.specs-list {
+  padding: 0 24px 16px 40px;
+  margin: 0;
+  line-height: 2;
+  font-size: 13px;
+}
+
+@media (min-width: 1200px) {
+  .col-lg-5 {
+    max-width: 20%;
+    flex: 0 0 20%;
+  }
 }
 
 .empty-state {
-  min-height: 70vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  gap: 18px;
-}
-
-.empty-state :deep(.el-empty__description p) {
-  color: #9ab0da;
-}
-
-@media (max-width: 1200px) {
-  .metric-value,
-  .metric-value.emphasis {
-    font-size: 28px;
-  }
-}
-
-@media (max-width: 768px) {
-  .lcc-report-view {
-    padding: 12px;
-  }
-
-  .report-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 14px;
-  }
-
-  .header-left {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .title-block h1 {
-    font-size: 22px;
-  }
-
-  .chart-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .chart-header span {
-    text-align: left;
-  }
-
-  .chart-canvas,
-  .chart-canvas-wide {
-    height: 320px;
-  }
+  justify-content: center;
+  height: 60vh;
+  gap: 24px;
 }
 </style>

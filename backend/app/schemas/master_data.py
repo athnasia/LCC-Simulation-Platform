@@ -584,6 +584,7 @@ class EnergyRateUpdate(BaseModel):
     unit_id: int | None = None
     is_active: bool | None = None
     description: str | None = Field(None, max_length=256)
+    calendars: list["EnergyCalendarCreateNested"] | None = Field(None, description="能源日历列表，传入则全量覆盖")
 
 
 class EnergyRateResponse(EnergyRateBase):

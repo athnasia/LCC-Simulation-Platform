@@ -90,7 +90,7 @@ def update_energy_rate(
         action="UPDATE",
         resource_type="MdEnergyRate",
         resource_id=rate_id,
-        detail=payload.model_dump(exclude_unset=True),
+        detail=payload.model_dump(mode="json", exclude_unset=True),
         ip_address=request.client.host if request.client else None,
     )
     return result
@@ -179,7 +179,7 @@ def update_energy_calendar(
         action="UPDATE",
         resource_type="MdEnergyCalendar",
         resource_id=calendar_id,
-        detail=payload.model_dump(exclude_unset=True),
+        detail=payload.model_dump(mode="json", exclude_unset=True),
         ip_address=request.client.host if request.client else None,
     )
     return result

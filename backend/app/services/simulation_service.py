@@ -65,7 +65,7 @@ class SimulationService:
         snapshot = self._lock_snapshot(snapshot_id)
         self._assert_status_available(snapshot)
 
-        virtual_clock = self._build_virtual_start_time()
+        virtual_clock = self._build_virtual_start_time(simulation_params)
         simulation_started_at = datetime.now()
         financial_baseline = self._build_financial_baseline_context(simulation_params)
 
@@ -84,7 +84,7 @@ class SimulationService:
         routes = snapshot_data.get("routes", [])
         master_data_rates = snapshot_data.get("master_data_rates", {})
 
-        electricity_context = self._load_electricity_rate_context()
+        electricity_context, active_rate_code = self._load_electricity_rate_context(simulation_params)
         equipment_profiles = self._load_equipment_profiles(routes)
 
         total_machine_cost = DECIMAL_ZERO
@@ -216,14 +216,14 @@ class SimulationService:
         result = {
             "status": "COMPLETED",
             "snapshot_id": snapshot_id,
-            "virtual_started_at": self._build_virtual_start_time().isoformat(),
+            "virtual_started_at": self._build_virtual_start_time(simulation_params).isoformat(),
             "virtual_finished_at": virtual_clock.isoformat(),
             "started_at": simulation_started_at.isoformat(),
             "finished_at": simulation_finished_at.isoformat(),
             "simulation_params": simulation_params,
             "financial_baseline": financial_baseline,
             "energy_context": {
-                "rate_code": "ELEC_INDUSTRIAL",
+                "rate_code": active_rate_code,
                 "base_price": self._decimal_to_string(electricity_context.base_price),
                 "rules": [
                     {
@@ -307,11 +307,43 @@ class SimulationService:
         static_total_cost = self._to_financial_decimal(
             CostingService(self.db).calculate_static_cost(snapshot_id).get("total_cost", DECIMAL_ZERO)
         )
-        single_run_hours = self._extract_single_run_hours(snapshot.snapshot_data or {})
+        snapshot_data = snapshot.snapshot_data or {}
+        single_run_hours = self._extract_single_run_hours(snapshot_data)
         if single_run_hours <= DECIMAL_ZERO:
             single_run_hours = DECIMAL_ONE
 
-        annual_opex = self._quantize_financial((static_total_cost / single_run_hours) * annual_hours)
+        routes = snapshot_data.get("routes", [])
+        master_data_rates = snapshot_data.get("master_data_rates", {})
+        equipment_profiles = self._load_equipment_profiles(routes)
+        
+        energy_kwh_per_run = DECIMAL_ZERO
+        for route in routes:
+            for step in route.get("steps", []):
+                process_type = str(step.get("process_type") or "IN_HOUSE").upper()
+                if process_type == "IN_HOUSE":
+                    eq_prof = self._get_equipment_profile(step, equipment_profiles, master_data_rates)
+                    t_hours = self._to_decimal(step.get("override_t_set")) + self._to_decimal(step.get("override_t_run"))
+                    energy_kwh_per_run += eq_prof.power_consumption * t_hours
+
+        electricity_context, active_rate_code = self._load_electricity_rate_context(payload)
+        
+        total_mult = DECIMAL_ZERO
+        for h in range(24):
+            t = time(hour=h, minute=0, second=0)
+            rate = DECIMAL_ONE
+            for rule in electricity_context.rules:
+                if rule.matches(t):
+                    rate = rule.multiplier
+                    break
+            total_mult += rate
+        
+        weighted_multiplier = total_mult / Decimal("24.0")
+        weighted_electricity_price = self._quantize_financial(electricity_context.base_price * weighted_multiplier)
+        annual_energy_kwh = (energy_kwh_per_run / single_run_hours) * annual_hours
+        annual_energy_cost = self._quantize_financial(annual_energy_kwh * weighted_electricity_price)
+        annual_regular_opex = self._quantize_financial((static_total_cost / single_run_hours) * annual_hours)
+
+        annual_opex = annual_regular_opex + annual_energy_cost
 
         capex_pv_total = capex
         opex_pv_total = DECIMAL_ZERO
@@ -367,6 +399,16 @@ class SimulationService:
             "static_total_cost": self._decimal_to_currency_string(static_total_cost),
             "single_run_hours": self._decimal_to_string(single_run_hours),
             "annual_opex": self._decimal_to_currency_string(annual_opex),
+            "chemical_energy_analysis": {
+                "rate_code": active_rate_code,
+                "base_price": self._decimal_to_string(electricity_context.base_price),
+                "weighted_multiplier": self._decimal_to_string(weighted_multiplier),
+                "weighted_price": self._decimal_to_currency_string(weighted_electricity_price),
+                "energy_kwh_per_run": self._decimal_to_string(energy_kwh_per_run),
+                "annual_energy_kwh": self._decimal_to_string(annual_energy_kwh),
+                "annual_energy_cost": self._decimal_to_currency_string(annual_energy_cost),
+                "annual_regular_opex": self._decimal_to_currency_string(annual_regular_opex)
+            },
             "financial_breakdown": {
                 "CAPEX": self._decimal_to_currency_string(capex_pv_total),
                 "OPEX": self._decimal_to_currency_string(opex_pv_total),
@@ -443,7 +485,14 @@ class SimulationService:
                 detail={"snapshot_id": snapshot.id, "status": snapshot.status},
             )
 
-    def _build_virtual_start_time(self) -> datetime:
+    def _build_virtual_start_time(self, simulation_params: dict[str, Any] | None = None) -> datetime:
+        if simulation_params:
+            start_time_str = simulation_params.get("start_time")
+            if start_time_str:
+                try:
+                    return datetime.fromisoformat(start_time_str)
+                except ValueError:
+                    pass
         tomorrow = datetime.now() + timedelta(days=1)
         return datetime.combine(tomorrow.date(), time(hour=8, minute=0, second=0))
 
@@ -512,20 +561,26 @@ class SimulationService:
     def _decimal_to_ratio_string(self, value: Decimal) -> str:
         return format(self._quantize_ratio(value), "f")
 
-    def _load_electricity_rate_context(self) -> ElectricityRateContext:
-        energy_rate = self.db.execute(
+    def _load_electricity_rate_context(self, simulation_params: dict[str, Any] | None = None) -> tuple[ElectricityRateContext, str]:
+        target_code = (simulation_params or {}).get("energy_rate_code")
+
+        stmt = (
             select(MdEnergyRate)
             .where(
-                MdEnergyRate.code == "ELEC_INDUSTRIAL",
                 MdEnergyRate.energy_type == EnergyType.ELECTRICITY,
                 MdEnergyRate.is_deleted == False,
                 MdEnergyRate.is_active == True,
             )
             .options(selectinload(MdEnergyRate.calendars))
-        ).scalar_one_or_none()
+        )
+
+        if target_code:
+            stmt = stmt.where(MdEnergyRate.code == target_code)
+        
+        energy_rate = self.db.execute(stmt).scalars().first()
 
         if energy_rate is None:
-            raise ResourceNotFoundError(resource="工业用电费率", identifier="ELEC_INDUSTRIAL")
+            raise ResourceNotFoundError(resource="工业用电费率", identifier=target_code or "ANY_ACTIVE_ELECTRICITY")
 
         rules = tuple(
             ElectricityCalendarRule(
@@ -540,7 +595,7 @@ class SimulationService:
         return ElectricityRateContext(
             base_price=self._to_decimal(energy_rate.unit_price),
             rules=rules,
-        )
+        ), energy_rate.code
 
     def _load_equipment_profiles(self, routes: list[dict[str, Any]]) -> dict[int, EquipmentProfile]:
         equipment_ids = sorted(
